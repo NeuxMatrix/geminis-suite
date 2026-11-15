@@ -1,0 +1,33 @@
+name: Compilar Geminis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: macos-latest
+            name: macOS
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Compilar
+        run: cmake --build build --config Release --parallel
+      - name: Publicar plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: GeminisFX-${{ matrix.name }}
+          path: |
+            build/GeminisFX_artefacts/Release/VST3
+            build/GeminisFX_artefacts/Release/AU
+            build/GeminisFX_artefacts/Release/Standalone
