@@ -1,26 +1,14 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
-#include <juce_dsp/juce_dsp.h>
-#include "dsp/GuitarChain.h"
+#include "Rack.h"
+#include "FxPresets.h"
+#include "../common/Tuner.h"
 
-namespace geminis
-{
-enum class Mode { none = 0, guitar = 1, voice = 2, instrument = 3 };
-
-struct FactoryPreset
-{
-    const char* name;
-    std::vector<std::pair<const char*, float>> values;
-};
-
-const std::vector<FactoryPreset>& getFactoryPresets();
-}
-
-class GeminisProcessor : public juce::AudioProcessor
+class GeminisFxProcessor : public juce::AudioProcessor
 {
 public:
-    GeminisProcessor();
-    ~GeminisProcessor() override = default;
+    GeminisFxProcessor();
+    ~GeminisFxProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -34,7 +22,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 4.0; }
+    double getTailLengthSeconds() const override { return 8.0; }
 
     int getNumPrograms() override;
     int getCurrentProgram() override { return currentPreset; }
@@ -46,25 +34,37 @@ public:
     void setStateInformation (const void*, int) override;
 
     //==========================================================================
-    geminis::Mode getMode() const noexcept { return (geminis::Mode) mode.load(); }
-    void setMode (geminis::Mode m);
+    geminis::fx::Mode getMode() const noexcept { return (geminis::fx::Mode) mode.load(); }
+    void setMode (geminis::fx::Mode m, bool loadDefaultPreset);
+
+    /** Aplica un preset de fábrica (índice en fxPresets()). */
+    void applyPreset (int index);
+    juce::String getPresetName() const { return presetName; }
+
+    /** Guarda o carga un preset de usuario en un archivo. */
+    bool saveUserPreset (const juce::File&);
+    bool loadUserPreset (const juce::File&);
+    static juce::File userPresetFolder();
 
     void loadUserIr (const juce::File&);
-    juce::String getUserIrName() const { return juce::File (userIrPath).getFileNameWithoutExtension(); }
 
     juce::AudioProcessorValueTreeState apvts;
+    geminis::fx::Rack rack;
+    geminis::Tuner tuner;
     std::atomic<float> inputPeak { 0.0f }, outputPeak { 0.0f };
+    std::function<void()> onPresetChanged;
 
 private:
-    static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
-    geminis::GuitarSettings readSettings() const;
-    float p (const char* id) const { return apvts.getRawParameterValue (id)->load(); }
+    juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
-    geminis::GuitarChain guitar;
     juce::AudioBuffer<float> work;
     std::atomic<int> mode { 0 };
     int currentPreset = 0;
-    juce::String userIrPath;
+    juce::String presetName { "Sin preset" };
+    std::atomic<float>* inputSel = nullptr;
+    std::atomic<float>* inGain = nullptr;
+    std::atomic<float>* outGain = nullptr;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GeminisProcessor)
+    JUCE_DECLARE_WEAK_REFERENCEABLE (GeminisFxProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GeminisFxProcessor)
 };

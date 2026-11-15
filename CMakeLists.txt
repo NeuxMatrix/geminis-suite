@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(GeminisSuite VERSION 0.1.0 LANGUAGES C CXX)
+project(GeminisSuite VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,6 +27,48 @@ if(APPLE)
   list(APPEND GEMINIS_FORMATS AU)
 endif()
 
+#==============================================================================
+# Recursos comunes: logo y tipografías (Inter y Cinzel, licencia SIL OFL)
+juce_add_binary_data(GeminisAssets
+  NAMESPACE BinaryData
+  SOURCES
+    Assets/logo/logo-emblema.png
+    Assets/fonts/Inter-Regular.otf
+    Assets/fonts/Inter-SemiBold.otf
+    Assets/fonts/Inter-Bold.otf
+    Assets/fonts/Cinzel-500.ttf
+    Assets/fonts/Cinzel-700.ttf)
+set_target_properties(GeminisAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+set(GEMINIS_COMMON_SOURCES
+  Source/common/Theme.cpp
+  Source/common/Splash.cpp)
+
+set(GEMINIS_DEFINES
+  JUCE_WEB_BROWSER=0
+  JUCE_USE_CURL=0
+  JUCE_VST3_CAN_REPLACE_VST2=0
+  JUCE_REPORT_APP_USAGE=0
+  JUCE_DISPLAY_SPLASH_SCREEN=0)
+
+function(geminis_configure target)
+  target_include_directories(${target} PRIVATE Source)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /utf-8 /bigobj)
+  endif()
+  target_compile_definitions(${target} PUBLIC ${GEMINIS_DEFINES})
+  target_link_libraries(${target}
+    PRIVATE
+      GeminisAssets
+      juce::juce_audio_utils
+      juce::juce_dsp
+    PUBLIC
+      juce::juce_recommended_config_flags
+      juce::juce_recommended_lto_flags)
+endfunction()
+
+#==============================================================================
+# Geminis FX: guitarra y voz (efecto de audio)
 juce_add_plugin(GeminisFX
   PRODUCT_NAME "Geminis FX"
   COMPANY_NAME "Geminis Audio"
@@ -34,6 +76,8 @@ juce_add_plugin(GeminisFX
   PLUGIN_MANUFACTURER_CODE Gmns
   PLUGIN_CODE Gfx1
   FORMATS ${GEMINIS_FORMATS}
+  ICON_BIG Assets/logo/icono-512.png
+  ICON_SMALL Assets/logo/icono-256.png
   IS_SYNTH FALSE
   NEEDS_MIDI_INPUT FALSE
   NEEDS_MIDI_OUTPUT FALSE
@@ -45,38 +89,35 @@ juce_add_plugin(GeminisFX
   MICROPHONE_PERMISSION_TEXT "Geminis necesita la entrada de audio para procesar tu guitarra o tu voz."
   COPY_PLUGIN_AFTER_BUILD FALSE)
 
-set(GEMINIS_SOURCES
-  Source/PluginProcessor.cpp
-  Source/PluginEditor.cpp)
+set(GEMINIS_FX_DSP_SOURCES
+  Source/fx/Modules.cpp
+  Source/fx/FxPresets.cpp)
 
-target_sources(GeminisFX PRIVATE ${GEMINIS_SOURCES})
-target_include_directories(GeminisFX PRIVATE Source)
+target_sources(GeminisFX PRIVATE
+  ${GEMINIS_COMMON_SOURCES}
+  ${GEMINIS_FX_DSP_SOURCES}
+  Source/fx/Rack.cpp
+  Source/fx/FxProcessor.cpp
+  Source/fx/FxEditor.cpp)
+geminis_configure(GeminisFX)
 
-if(MSVC)
-  target_compile_options(GeminisFX PRIVATE /utf-8)
+#==============================================================================
+# Geminis Instrument: sintetizador, batería e instrumentos (MIDI)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Source/inst/InstProcessor.cpp)
+  include(Source/inst/Instrument.cmake)
 endif()
 
-target_compile_definitions(GeminisFX PUBLIC
-  JUCE_WEB_BROWSER=0
-  JUCE_USE_CURL=0
-  JUCE_VST3_CAN_REPLACE_VST2=0
-  JUCE_REPORT_APP_USAGE=0)
-
-target_link_libraries(GeminisFX
-  PRIVATE
-    juce::juce_audio_utils
-    juce::juce_dsp
-  PUBLIC
-    juce::juce_recommended_config_flags
-    juce::juce_recommended_lto_flags)
-
-# Prueba sin interfaz: procesa audio de prueba por la cadena y comprueba el resultado.
+#==============================================================================
+# Prueba sin interfaz: pasa audio de prueba por todos los módulos y presets.
 option(GEMINIS_BUILD_TESTS "Compila la prueba de audio sin interfaz" OFF)
 if(GEMINIS_BUILD_TESTS)
   juce_add_console_app(GeminisDspTest PRODUCT_NAME "GeminisDspTest")
-  target_sources(GeminisDspTest PRIVATE tests/DspTest.cpp)
+  target_sources(GeminisDspTest PRIVATE tests/DspTest.cpp ${GEMINIS_FX_DSP_SOURCES})
   target_include_directories(GeminisDspTest PRIVATE Source)
-  target_compile_definitions(GeminisDspTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+  if(MSVC)
+    target_compile_options(GeminisDspTest PRIVATE /utf-8 /bigobj)
+  endif()
+  target_compile_definitions(GeminisDspTest PRIVATE ${GEMINIS_DEFINES})
   target_link_libraries(GeminisDspTest PRIVATE
-    juce::juce_audio_formats juce::juce_dsp juce::juce_recommended_config_flags)
+    juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp juce::juce_recommended_config_flags)
 endif()

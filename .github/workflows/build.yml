@@ -2,8 +2,7 @@ name: Compilar Geminis
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: ['**']
   workflow_dispatch:
 
 jobs:
@@ -17,17 +16,32 @@ jobs:
           - os: macos-latest
             name: macOS
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Configurar
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DGEMINIS_BUILD_TESTS=ON
       - name: Compilar
-        run: cmake --build build --config Release --parallel
-      - name: Publicar plugin
+        run: cmake --build build --config Release --parallel 4
+      - name: Prueba de audio (todos los módulos y presets)
+        run: |
+          mkdir -p prueba-audio
+          if [ -f build/GeminisDspTest_artefacts/Release/GeminisDspTest.exe ]; then
+            build/GeminisDspTest_artefacts/Release/GeminisDspTest.exe prueba-audio
+          else
+            build/GeminisDspTest_artefacts/Release/GeminisDspTest prueba-audio
+          fi
+      - name: Publicar plugins
         uses: actions/upload-artifact@v4
         with:
-          name: GeminisFX-${{ matrix.name }}
+          name: Geminis-${{ matrix.name }}
+          if-no-files-found: warn
           path: |
             build/GeminisFX_artefacts/Release/VST3
             build/GeminisFX_artefacts/Release/AU
             build/GeminisFX_artefacts/Release/Standalone
+            build/GeminisInstrument_artefacts/Release/VST3
+            build/GeminisInstrument_artefacts/Release/AU
+            build/GeminisInstrument_artefacts/Release/Standalone
