@@ -26,10 +26,17 @@ public:
     void setAccent (juce::Colour c) { slider.setColour (juce::Slider::rotarySliderFillColourId, c); repaint(); }
     void setBipolar (bool b) { slider.getProperties().set ("bipolar", b); }
     void setCompact (bool c) { compact = c; resized(); }
+    void setShowName (bool b) { showName = b; name.setVisible (b); resized(); }
 
     void resized() override
     {
         auto r = getLocalBounds();
+        if (! showName)
+        {
+            slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+            slider.setBounds (r);
+            return;
+        }
         if (compact)
         {
             name.setBounds (r.removeFromTop (13));
@@ -60,7 +67,7 @@ private:
         addAndMakeVisible (name);
     }
 
-    bool compact = false;
+    bool compact = false, showName = true;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
 };
 

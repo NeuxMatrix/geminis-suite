@@ -33,7 +33,15 @@ jobs:
           else
             build/GeminisDspTest_artefacts/Release/GeminisDspTest prueba-audio
           fi
+      - name: Prueba de Geminis Instrument (presets, kits e instrumentos)
+        run: |
+          if [ -f build/GeminisInstTest_artefacts/Release/GeminisInstTest.exe ]; then
+            build/GeminisInstTest_artefacts/Release/GeminisInstTest.exe
+          else
+            build/GeminisInstTest_artefacts/Release/GeminisInstTest
+          fi
       - name: Publicar plugins
+        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: Geminis-${{ matrix.name }}

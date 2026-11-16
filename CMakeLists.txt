@@ -101,6 +101,8 @@ target_sources(GeminisFX PRIVATE
   Source/fx/FxEditor.cpp)
 geminis_configure(GeminisFX)
 
+option(GEMINIS_BUILD_TESTS "Compila las pruebas de audio sin interfaz" OFF)
+
 #==============================================================================
 # Geminis Instrument: sintetizador, batería e instrumentos (MIDI)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Source/inst/InstProcessor.cpp)
@@ -109,7 +111,6 @@ endif()
 
 #==============================================================================
 # Prueba sin interfaz: pasa audio de prueba por todos los módulos y presets.
-option(GEMINIS_BUILD_TESTS "Compila la prueba de audio sin interfaz" OFF)
 if(GEMINIS_BUILD_TESTS)
   juce_add_console_app(GeminisDspTest PRODUCT_NAME "GeminisDspTest")
   target_sources(GeminisDspTest PRIVATE tests/DspTest.cpp ${GEMINIS_FX_DSP_SOURCES})
