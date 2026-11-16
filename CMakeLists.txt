@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(GeminisSuite VERSION 0.2.0 LANGUAGES C CXX)
+project(GeminisSuite VERSION 0.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,6 +57,9 @@ function(geminis_configure target)
     target_compile_options(${target} PRIVATE /utf-8 /bigobj)
   endif()
   target_compile_definitions(${target} PUBLIC ${GEMINIS_DEFINES})
+  # Aplicación independiente propia (pide 44100 Hz por defecto).
+  target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/Source/common/StandaloneApp.cpp)
+  target_compile_definitions(${target} PUBLIC JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
   target_link_libraries(${target}
     PRIVATE
       GeminisAssets

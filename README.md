@@ -62,9 +62,29 @@ Todos los modelos son diseños propios con nombres propios. No se usan marcas ni
 ## Descargar
 
 GitHub compila Windows y macOS en cada cambio. En la pestaña **Actions** del repositorio, abre la última
-ejecución y descarga `Geminis-Windows` o `Geminis-macOS`. En Windows, copia las carpetas `.vst3` a
-`C:\Program Files\Common Files\VST3\` y vuelve a buscar plugins en tu DAW. En Maschine:
-Preferencias > Plug-ins > Rescan.
+ejecución y baja hasta las descargas.
+
+- **Windows:** descarga `Geminis-Instalador-Windows`, descomprímelo y abre `Geminis-Suite-…-Instalador.exe`.
+  Instala los dos programas con accesos en el menú Inicio, copia los plugins a
+  `C:\Program Files\Common Files\VST3\` y aparece en «Aplicaciones instaladas» para desinstalarlo.
+  Como el instalador no está firmado, Windows puede avisar con «Windows protegió su PC»: pulsa
+  «Más información» y luego «Ejecutar de todas formas».
+- **Sin instalador:** `Geminis-Windows` trae los mismos archivos sueltos. Copia las carpetas `.vst3` a
+  `C:\Program Files\Common Files\VST3\`; los `.exe` funcionan desde cualquier carpeta.
+- **macOS:** `Geminis-macOS`.
+
+Después, vuelve a buscar plugins en tu DAW. En Maschine: Preferencias > Plug-ins > Rescan.
+
+### Programa independiente
+
+- Los ajustes de audio están en el botón **Options** de arriba, en «Audio/MIDI Settings...».
+- Geminis FX empieza con la entrada silenciada para que no se acople. Para oír la guitarra o el
+  micro, apaga «Feedback Loop: Mute audio input». Usa auriculares si tocas con el micro y los
+  altavoces del portátil, porque se acoplan enseguida. El programa recuerda lo que elijas.
+- Los dos programas piden 44100 Hz. Con «Windows Audio» la frecuencia la marca Windows, así que
+  puede que solo aparezca 48000 Hz. Para usar 44100 Hz, elige «Windows Audio (Exclusive Mode)»
+  o cambia el formato del dispositivo en Windows: Panel de control de sonido > el dispositivo >
+  Propiedades > Opciones avanzadas.
 
 ## Compilar
 

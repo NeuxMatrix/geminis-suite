@@ -40,6 +40,25 @@ jobs:
           else
             build/GeminisInstTest_artefacts/Release/GeminisInstTest
           fi
+      - name: Instalador de Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(GeminisSuite VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          & $iscc "/DAppVersion=$version" installer\GeminisSuite.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publicar instalador
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Geminis-Instalador-Windows
+          if-no-files-found: error
+          path: installer/Output/*.exe
       - name: Publicar plugins
         if: success() || failure()
         uses: actions/upload-artifact@v4
