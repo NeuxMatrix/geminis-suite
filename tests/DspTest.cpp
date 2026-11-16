@@ -1,14 +1,16 @@
-// Prueba sin interfaz de la cadena de guitarra: genera notas de prueba, las pasa
-// por cada modelo y comprueba que la salida es válida. Escribe un WAV por modelo.
+// Prueba sin interfaz de Geminis FX.
+// 1) Pasa una guitarra sintética por cada módulo con sus valores por defecto, al mínimo y al máximo.
+// 2) Monta cada preset de fábrica como una cadena de módulos y escribe un WAV por preset.
+// Comprueba que la salida es finita, que no se dispara y que no queda en silencio.
 #include <juce_audio_formats/juce_audio_formats.h>
-#include "dsp/GuitarChain.h"
+#include "fx/Modules.h"
+#include "fx/FxPresets.h"
 #include <iostream>
 
-using namespace geminis;
+using namespace geminis::fx;
 
 static void pluck (std::vector<float>& out, double sr, double hz, int start, float amp)
 {
-    // Cuerda pulsada sencilla (Karplus-Strong) para tener algo parecido a una guitarra.
     const int period = (int) (sr / hz);
     std::vector<float> line ((size_t) period);
     juce::Random rng (1234 + (int) hz);
@@ -23,6 +25,86 @@ static void pluck (std::vector<float>& out, double sr, double hz, int start, flo
     }
 }
 
+static std::vector<float> makeGuitar (double sr, int total)
+{
+    std::vector<float> dry ((size_t) total, 0.0f);
+    const double notes[] = { 82.41, 110.0, 146.83, 196.0, 246.94, 329.63 };
+    for (int i = 0; i < 6; ++i) pluck (dry, sr, notes[i], (int) (sr * 0.25 * i), 0.18f);
+    for (int i = 0; i < 3; ++i) pluck (dry, sr, notes[i * 2], (int) (sr * 2.0), 0.14f);
+    return dry;
+}
+
+static std::vector<float> makeVoice (double sr, int total)
+{
+    // Vocal sintética: diente de sierra con vibrato y dos formantes, más una "s" de ruido.
+    std::vector<float> out ((size_t) total, 0.0f);
+    geminis::dsp::Biquad f1, f2;
+    f1.setBandpass (sr, 700.0, 4.0);
+    f2.setBandpass (sr, 1200.0, 5.0);
+    double phase = 0.0;
+    juce::Random rng (7);
+    for (int i = 0; i < total; ++i)
+    {
+        const double t = i / sr;
+        const double hz = 220.0 * std::pow (2.0, (std::floor (t * 2.0) * 2.0) / 12.0) * (1.0 + 0.004 * std::sin (t * 30.0));
+        phase += hz / sr;
+        phase -= std::floor (phase);
+        const float saw = (float) (2.0 * phase - 1.0);
+        float v = f1.process (saw) * 0.6f + f2.process (saw) * 0.4f;
+        if (std::fmod (t, 1.0) > 0.85) v += (rng.nextFloat() * 2.0f - 1.0f) * 0.25f;
+        out[(size_t) i] = v * 0.4f;
+    }
+    return out;
+}
+
+struct Result { float peak = 0.0f, rms = 0.0f; bool finite = true; };
+
+static Result runChain (std::vector<std::unique_ptr<Module>>& chain, const std::vector<std::vector<float>>& values,
+                        const std::vector<float>& dry, juce::AudioBuffer<float>* outBuf, double sr, int block)
+{
+    const int total = (int) dry.size();
+    std::vector<float> L ((size_t) block), R ((size_t) block);
+    Context ctx;
+    ctx.sampleRate = sr;
+    ctx.bpm = 120.0;
+    Result res;
+    double sum = 0.0;
+    for (int pos = 0; pos < total; pos += block)
+    {
+        const int n = juce::jmin (block, total - pos);
+        std::copy (dry.begin() + pos, dry.begin() + pos + n, L.begin());
+        std::copy (dry.begin() + pos, dry.begin() + pos + n, R.begin());
+        ctx.stereo = false;
+        for (size_t m = 0; m < chain.size(); ++m)
+            chain[m]->process (L.data(), R.data(), n, values[m].data(), ctx);
+        for (int i = 0; i < n; ++i)
+        {
+            if (! std::isfinite (L[(size_t) i]) || ! std::isfinite (R[(size_t) i])) res.finite = false;
+            res.peak = juce::jmax (res.peak, std::abs (L[(size_t) i]), std::abs (R[(size_t) i]));
+            sum += L[(size_t) i] * L[(size_t) i];
+        }
+        if (outBuf != nullptr)
+        {
+            outBuf->copyFrom (0, pos, L.data(), n);
+            outBuf->copyFrom (1, pos, R.data(), n);
+        }
+    }
+    res.rms = (float) std::sqrt (sum / total);
+    return res;
+}
+
+static void writeWav (const juce::File& f, const juce::AudioBuffer<float>& buf, double sr)
+{
+    f.deleteFile();
+    juce::WavAudioFormat wav;
+    std::unique_ptr<juce::OutputStream> os (f.createOutputStream());
+    if (os == nullptr) return;
+    std::unique_ptr<juce::AudioFormatWriter> w (wav.createWriterFor (os.get(), sr, 2, 24, {}, 0));
+    if (w == nullptr) return;
+    os.release();
+    w->writeFromAudioSampleBuffer (buf, 0, buf.getNumSamples());
+}
+
 int main (int argc, char** argv)
 {
     const double sr = 48000.0;
@@ -30,79 +112,88 @@ int main (int argc, char** argv)
     const juce::File outDir = argc > 1 ? juce::File (argv[1]) : juce::File::getCurrentWorkingDirectory();
     outDir.createDirectory();
 
-    std::vector<float> dry ((size_t) total, 0.0f);
-    const double notes[] = { 82.41, 110.0, 146.83, 196.0, 246.94, 329.63 };
-    for (int i = 0; i < 6; ++i) pluck (dry, sr, notes[i], (int) (sr * 0.25 * i), 0.18f);
-    for (int i = 0; i < 3; ++i) pluck (dry, sr, notes[i * 2], (int) (sr * 2.0), 0.14f);
-
-    struct Case { const char* name; GuitarSettings s; };
-    std::vector<Case> cases;
-    for (int model = 0; model < 3; ++model)
-    {
-        GuitarSettings s;
-        s.ampModel = model; s.cabType = model == 0 ? 0 : model + 1;
-        s.ampGain = model == 0 ? 0.35f : 0.6f;
-        static const char* names[] = { "cristal", "britannia", "titan" };
-        cases.push_back ({ names[model], s });
-    }
-    {
-        GuitarSettings s;
-        s.ampModel = 1; s.cabType = 2; s.ampGain = 0.7f;
-        s.compOn = s.driveOn = s.tremOn = s.delayOn = s.reverbOn = true;
-        cases.push_back ({ "todo_activo", s });
-    }
-    {
-        GuitarSettings s; // extremos: todo al máximo
-        s.ampModel = 2; s.cabType = 3;
-        s.ampGain = s.ampBass = s.ampMid = s.ampTreble = s.ampPresence = s.ampMaster = 1.0f;
-        s.driveOn = true; s.driveGain = s.driveLevel = s.driveTone = 1.0f;
-        s.delayOn = true; s.delayFeedback = 0.9f; s.delayMix = 1.0f;
-        s.reverbOn = true; s.reverbSize = 1.0f; s.reverbMix = 1.0f;
-        cases.push_back ({ "extremo", s });
-    }
-
+    const auto guitar = makeGuitar (sr, total);
+    const auto voice = makeVoice (sr, total);
     bool ok = true;
-    for (auto& c : cases)
+    int checks = 0;
+
+    if (argc > 2 && juce::String (argv[2]) == "--amp")
     {
-        GuitarChain chain;
-        chain.prepare (sr, block);
-        juce::AudioBuffer<float> out (2, total);
-        std::vector<float> mono ((size_t) block);
-
-        for (int pos = 0; pos < total; pos += block)
+        // Calibración: nivel de cada amplificador con ganancia baja, media y alta (master 0.5, tonos al centro).
+        for (int model = 0; model < 6; ++model)
         {
-            const int n = juce::jmin (block, total - pos);
-            std::copy (dry.begin() + pos, dry.begin() + pos + n, mono.begin());
-            chain.process (mono.data(), out.getWritePointer (0, pos), out.getWritePointer (1, pos), n, c.s);
-        }
-
-        bool finite = true;
-        for (int ch = 0; ch < 2; ++ch)
-            for (int i = 0; i < total; ++i)
-                finite = finite && std::isfinite (out.getSample (ch, i));
-
-        const float peak = out.getMagnitude (0, total);
-        const float rms = out.getRMSLevel (0, 0, total);
-        const bool caseOk = finite && rms > 0.001f && peak <= 1.001f;
-        ok = ok && caseOk;
-
-        std::cout << (caseOk ? "OK   " : "FALLO ") << c.name
-                  << "  pico " << juce::Decibels::gainToDecibels (peak) << " dB"
-                  << "  rms " << juce::Decibels::gainToDecibels (rms) << " dB"
-                  << "  latencia " << chain.getLatencySamples() << " muestras\n";
-
-        juce::WavAudioFormat wav;
-        auto file = outDir.getChildFile (juce::String ("geminis_") + c.name + ".wav");
-        file.deleteFile();
-        if (auto stream = file.createOutputStream())
-            if (auto* writer = wav.createWriterFor (stream.release(), sr, 2, 24, {}, 0))
+            std::cout << "modelo " << model << ":";
+            for (float g : { 0.15f, 0.5f, 0.85f })
             {
-                std::unique_ptr<juce::AudioFormatWriter> w (writer);
-                out.applyGain (peak > 0.98f ? 0.98f / peak : 1.0f);
-                w->writeFromAudioSampleBuffer (out, 0, total);
+                std::vector<std::unique_ptr<Module>> chain;
+                chain.push_back (info (amp).create());
+                chain.back()->prepare (sr, block);
+                std::vector<std::vector<float>> values { { (float) model, g, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.0f } };
+                const auto r = runChain (chain, values, guitar, nullptr, sr, block);
+                std::cout << "  g" << g << " rms " << juce::Decibels::gainToDecibels (r.rms) << " dB pico " << r.peak;
             }
+            std::cout << "\n";
+        }
+        return 0;
     }
 
-    std::cout << (ok ? "TODAS LAS PRUEBAS PASAN\n" : "HAY FALLOS\n");
+    // 1) Cada módulo por separado, en tres posiciones de sus controles.
+    for (int t = 1; t < numTypes; ++t)
+    {
+        const auto& inf = info (t);
+        for (int variant = 0; variant < 3; ++variant)
+        {
+            std::vector<float> vals;
+            for (const auto& p : inf.params)
+                vals.push_back (variant == 0 ? p.def : p.toReal (variant == 1 ? 0.0f : 1.0f));
+            vals.resize (8, 0.0f);
+
+            std::vector<std::unique_ptr<Module>> chain;
+            chain.push_back (inf.create());
+            chain.back()->prepare (sr, block);
+            std::vector<std::vector<float>> values { vals };
+            const auto& src = (inf.modes & forGuitar) ? guitar : voice;
+            const auto r = runChain (chain, values, src, nullptr, sr, block);
+            ++checks;
+            const bool bad = ! r.finite || r.peak > 12.0f;   // +21 dB: todo al máximo es legítimo, el limitador final lo recoge
+            if (bad) ok = false;
+            if (bad || variant == 0)
+                std::cout << (bad ? "FALLO  " : "ok     ") << juce::String::fromUTF8 (inf.name).paddedRight (' ', 22)
+                          << (variant == 0 ? " defecto" : variant == 1 ? " mínimo " : " máximo ")
+                          << "  pico " << juce::String (r.peak, 3) << "  rms " << juce::String (r.rms, 4)
+                          << "  latencia " << chain.back()->getLatency() << "\n";
+        }
+    }
+
+    // 2) Cada preset como cadena completa (sin el limitador final del plugin).
+    const auto& presets = fxPresets();
+    for (const auto& p : presets)
+    {
+        std::vector<std::unique_ptr<Module>> chain;
+        std::vector<std::vector<float>> values;
+        for (const auto& s : p.slots)
+        {
+            if (! s.on || s.type == empty) continue;
+            const auto& inf = info (s.type);
+            std::vector<float> vals;
+            for (size_t i = 0; i < inf.params.size(); ++i)
+                vals.push_back (i < s.values.size() ? juce::jlimit (inf.params[i].min, inf.params[i].max, s.values[i]) : inf.params[i].def);
+            vals.resize (8, 0.0f);
+            chain.push_back (inf.create());
+            chain.back()->prepare (sr, block);
+            values.push_back (vals);
+        }
+        juce::AudioBuffer<float> out (2, total);
+        const auto r = runChain (chain, values, p.mode == Mode::voice ? voice : guitar, &out, sr, block);
+        ++checks;
+        const bool bad = ! r.finite || r.peak > 1.6f || r.rms < 1.0e-4f;
+        if (bad) ok = false;
+        const auto name = juce::String::fromUTF8 (p.name);
+        std::cout << (bad ? "FALLO  " : "ok     ") << "preset " << name.paddedRight (' ', 24)
+                  << "  pico " << juce::String (r.peak, 3) << "  rms " << juce::String (r.rms, 4) << "\n";
+        writeWav (outDir.getChildFile ((p.mode == Mode::voice ? "voz_" : "guitarra_") + name.replaceCharacter (' ', '_') + ".wav"), out, sr);
+    }
+
+    std::cout << "\n" << checks << " pruebas, resultado: " << (ok ? "TODO BIEN" : "HAY FALLOS") << "\n";
     return ok ? 0 : 1;
 }
