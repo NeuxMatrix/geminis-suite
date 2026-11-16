@@ -2,6 +2,7 @@
 // y los instrumentos, mide niveles y comprueba que nada se dispara ni se queda mudo.
 // Uso: GeminisInstTest [carpeta_para_wav]
 #include "inst/InstProcessor.h"
+#include "app/SharedRateDevices.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <cstdio>
 #include <complex>
@@ -56,6 +57,52 @@ Result render (GeminisInstrumentProcessor& p, double seconds, const std::vector<
 }
 
 float toDb (float g) { return juce::Decibels::gainToDecibels (g, -120.0f); }
+
+/** Dispositivo de prueba que se porta como «Windows Audio» compartido: solo anuncia
+    48000 Hz, pero se abre a la frecuencia que se le pida. */
+class FakeSharedDevice final : public juce::AudioIODevice
+{
+public:
+    FakeSharedDevice() : juce::AudioIODevice ("Altavoces de prueba", "Windows Audio") {}
+    juce::StringArray getOutputChannelNames() override { return { "Salida 1", "Salida 2" }; }
+    juce::StringArray getInputChannelNames() override  { return { "Entrada 1", "Entrada 2" }; }
+    juce::Array<double> getAvailableSampleRates() override { return { 48000.0 }; }
+    juce::Array<int> getAvailableBufferSizes() override    { return { 480 }; }
+    int getDefaultBufferSize() override                    { return 480; }
+    juce::String open (const juce::BigInteger& i, const juce::BigInteger& o, double sampleRate, int) override
+    {
+        ins = i; outs = o; rate = sampleRate > 0 ? sampleRate : 48000.0; opened = true; return {};
+    }
+    void close() override                                     { opened = false; }
+    bool isOpen() override                                    { return opened; }
+    void start (juce::AudioIODeviceCallback*) override        {}
+    void stop() override                                      {}
+    bool isPlaying() override                                 { return false; }
+    juce::String getLastError() override                      { return {}; }
+    int getCurrentBufferSizeSamples() override                { return 480; }
+    double getCurrentSampleRate() override                    { return rate; }
+    int getCurrentBitDepth() override                         { return 32; }
+    juce::BigInteger getActiveOutputChannels() const override { return outs; }
+    juce::BigInteger getActiveInputChannels() const override  { return ins; }
+    int getOutputLatencyInSamples() override                  { return 0; }
+    int getInputLatencyInSamples() override                   { return 0; }
+private:
+    juce::BigInteger ins, outs;
+    double rate = 48000.0;
+    bool opened = false;
+};
+
+class FakeSharedType final : public juce::AudioIODeviceType
+{
+public:
+    FakeSharedType() : juce::AudioIODeviceType ("Windows Audio") {}
+    void scanForDevices() override {}
+    juce::StringArray getDeviceNames (bool) const override { return { "Altavoces de prueba" }; }
+    int getDefaultDeviceIndex (bool) const override        { return 0; }
+    int getIndexOfDevice (juce::AudioIODevice* d, bool) const override { return d != nullptr ? 0 : -1; }
+    bool hasSeparateInputsAndOutputs() const override      { return true; }
+    juce::AudioIODevice* createDevice (const juce::String&, const juce::String&) override { return new FakeSharedDevice(); }
+};
 
 void writeWav (const juce::File& f, const juce::AudioBuffer<float>& b)
 {
@@ -364,6 +411,37 @@ int main (int argc, char** argv)
         check (other->drums.getPattern (2).steps[7][9] == 3, "el estado no recupera los patrones");
         check (other->getSynthPresetName() == presets[5].name, "el estado no recupera el nombre del preset");
         std::printf ("\nEstado guardado: %d bytes\n", (int) state.getSize());
+    }
+
+    //==========================================================================
+    // Programa Géminis: «Windows Audio» compartido ofrece 44100 Hz y se abre a 44100 Hz
+    {
+        geminis::app::SharedRateDeviceType wrapped (std::make_unique<FakeSharedType>());
+        std::unique_ptr<juce::AudioIODevice> device (wrapped.createDevice ("Altavoces de prueba", "Altavoces de prueba"));
+        const auto rates = device != nullptr ? device->getAvailableSampleRates() : juce::Array<double>();
+        check (rates.contains (44100.0) && rates.contains (48000.0), "Windows Audio no ofrece 44100 y 48000 Hz");
+
+        juce::AudioDeviceManager dm;
+        dm.addAudioDeviceType (std::make_unique<geminis::app::SharedRateDeviceType> (std::make_unique<FakeSharedType>()));
+        dm.setCurrentAudioDeviceType ("Windows Audio", false);
+        juce::AudioDeviceManager::AudioDeviceSetup preferred;
+        preferred.sampleRate = 44100.0;
+        const auto error = dm.initialise (2, 2, nullptr, false, {}, &preferred);
+        const double opened = dm.getCurrentAudioDevice() != nullptr ? dm.getCurrentAudioDevice()->getCurrentSampleRate() : 0.0;
+        std::printf ("\nWindows Audio: %d frecuencias, se abre a %.0f Hz\n", rates.size(), opened);
+        check (error.isEmpty(), "no se abre el dispositivo de prueba: " + error);
+        check (opened == 44100.0, "Windows Audio no se abre a 44100 Hz por defecto");
+
+        // Con un ajuste guardado a 48000 Hz, la conversión de Géminis lo pasa a 44100 Hz
+        juce::XmlElement saved ("DEVICESETUP");
+        saved.setAttribute ("deviceType", "Windows Audio");
+        saved.setAttribute ("audioOutputDeviceName", "Altavoces de prueba");
+        saved.setAttribute ("audioInputDeviceName", "Altavoces de prueba");
+        saved.setAttribute ("audioDeviceRate", 44100.0);
+        dm.closeAudioDevice();
+        dm.initialise (2, 2, &saved, false, {}, &preferred);
+        check (dm.getCurrentAudioDevice() != nullptr && dm.getCurrentAudioDevice()->getCurrentSampleRate() == 44100.0,
+               "un ajuste guardado a 44100 Hz no se respeta");
     }
 
     std::printf ("\n%d pruebas, %d fallos\n", tests, failures);

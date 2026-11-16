@@ -12,6 +12,7 @@
 #include "../common/Theme.h"
 #include "../fx/FxProcessor.h"
 #include "../inst/InstProcessor.h"
+#include "SharedRateDevices.h"
 
 #ifndef GEMINIS_VERSION
  #define GEMINIS_VERSION "0.0.0"
@@ -304,6 +305,16 @@ private:
     void startAudio()
     {
         auto saved = settings.getXmlValue ("audio");
+
+        // Las versiones anteriores guardaron 48000 Hz porque Windows Audio no ofrecía otra.
+        // Se pasa a 44100 Hz una vez; después se respeta lo que elijas.
+        if (! settings.containsKey ("frecuencia44100"))
+        {
+            if (saved != nullptr)
+                saved->setAttribute ("audioDeviceRate", preferredSampleRate);
+            settings.setValue ("frecuencia44100", true);
+        }
+
         juce::AudioDeviceManager::AudioDeviceSetup preferred;
         preferred.sampleRate = preferredSampleRate;
         deviceManager.initialise (2, 2, saved.get(), true, {}, &preferred);
@@ -444,7 +455,7 @@ private:
     juce::PropertiesFile& settings;
     juce::LookAndFeel& lnf;
 
-    juce::AudioDeviceManager deviceManager;
+    GeminisDeviceManager deviceManager;
     juce::AudioProcessorPlayer player;
     std::unique_ptr<juce::MidiDeviceListConnection> midiListConnection;
     juce::StringArray knownMidiInputs;

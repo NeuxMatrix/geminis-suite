@@ -84,10 +84,8 @@ Después, vuelve a buscar plugins en tu DAW. En Maschine: Preferencias > Plug-in
 - La entrada de audio empieza silenciada para que no se acople. En Guitarra y Voz aparece un aviso con el
   botón «Activar entrada». Usa auriculares si tocas con el micro y los altavoces del portátil, porque se
   acoplan enseguida. El programa recuerda lo que elijas y también tus sonidos de cada modo.
-- Pide 44100 Hz. Con «Windows Audio» la frecuencia la marca Windows, así que
-  puede que solo aparezca 48000 Hz. Para usar 44100 Hz, elige «Windows Audio (Exclusive Mode)»
-  o cambia el formato del dispositivo en Windows: Panel de control de sonido > el dispositivo >
-  Propiedades > Opciones avanzadas.
+- Empieza a **44100 Hz**. «Windows Audio» ofrece 44100, 48000, 88200 y 96000 Hz aunque Windows
+  trabaje a otra frecuencia, porque el programa convierte la frecuencia al abrir la tarjeta.
 
 ## Compilar
 
