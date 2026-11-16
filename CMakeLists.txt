@@ -57,6 +57,9 @@ function(geminis_configure target)
     target_compile_options(${target} PRIVATE /utf-8 /bigobj)
   endif()
   target_compile_definitions(${target} PUBLIC ${GEMINIS_DEFINES})
+  # Aplicación independiente propia (pide 44100 Hz por defecto).
+  target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/Source/common/StandaloneApp.cpp)
+  target_compile_definitions(${target} PUBLIC JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
   target_link_libraries(${target}
     PRIVATE
       GeminisAssets

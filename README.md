@@ -66,6 +66,17 @@ ejecución y descarga `Geminis-Windows` o `Geminis-macOS`. En Windows, copia las
 `C:\Program Files\Common Files\VST3\` y vuelve a buscar plugins en tu DAW. En Maschine:
 Preferencias > Plug-ins > Rescan.
 
+### Programa independiente
+
+- Los ajustes de audio están en el botón **Options** de arriba, en «Audio/MIDI Settings...».
+- Geminis FX empieza con la entrada silenciada para que no se acople. Para oír la guitarra o el
+  micro, apaga «Feedback Loop: Mute audio input». Usa auriculares si tocas con el micro y los
+  altavoces del portátil, porque se acoplan enseguida. El programa recuerda lo que elijas.
+- Los dos programas piden 44100 Hz. Con «Windows Audio» la frecuencia la marca Windows, así que
+  puede que solo aparezca 48000 Hz. Para usar 44100 Hz, elige «Windows Audio (Exclusive Mode)»
+  o cambia el formato del dispositivo en Windows: Panel de control de sonido > el dispositivo >
+  Propiedades > Opciones avanzadas.
+
 ## Compilar
 
 Hace falta CMake 3.22 o superior y un compilador de C++20 (Visual Studio 2022 en Windows, Xcode en macOS).
