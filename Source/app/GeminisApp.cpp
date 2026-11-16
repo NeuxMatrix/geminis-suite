@@ -94,12 +94,18 @@ public:
         muteToggle.setButtonText (U ("Silenciar la entrada de audio para que no se acople"));
         muteToggle.getToggleStateValue().referTo (muteInput);
         hint.setText (U ("Si tocas con el micro y los altavoces del portátil, usa auriculares."), juce::dontSendNotification);
-        hint.setColour (juce::Label::textColourId, colours::textDim);
-        hint.setFont (Fonts::ui (13.0f));
+       #if JUCE_ASIO
+        asioHint.setText (U ("¿Tarjeta de sonido como la Maschine? Elige ASIO en «Tipo de dispositivo»."), juce::dontSendNotification);
+       #endif
+        for (auto* l : { &hint, &asioHint })
+        {
+            l->setColour (juce::Label::textColourId, colours::textDim);
+            l->setFont (Fonts::ui (13.0f));
+            addAndMakeVisible (l);
+        }
         addAndMakeVisible (muteToggle);
-        addAndMakeVisible (hint);
         addAndMakeVisible (selector);
-        setSize (580, 660);
+        setSize (580, 660 + (asioHint.getText().isEmpty() ? 0 : 22));
     }
 
     ~AudioSettings() override { setLookAndFeel (nullptr); }
@@ -111,13 +117,15 @@ public:
         auto r = getLocalBounds().reduced (16, 12);
         muteToggle.setBounds (r.removeFromTop (30));
         hint.setBounds (r.removeFromTop (22).withTrimmedLeft (4));
+        if (asioHint.getText().isNotEmpty())
+            asioHint.setBounds (r.removeFromTop (22).withTrimmedLeft (4));
         r.removeFromTop (8);
         selector.setBounds (r);
     }
 
 private:
     juce::ToggleButton muteToggle;
-    juce::Label hint;
+    juce::Label hint, asioHint;
     juce::AudioDeviceSelectorComponent selector;
 };
 

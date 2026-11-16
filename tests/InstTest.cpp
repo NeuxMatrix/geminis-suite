@@ -11,6 +11,13 @@ namespace
 {
 using namespace geminis::inst;
 
+/** Solo para leer y escribir el estado en XML, como hace el DAW. */
+struct StateXml : juce::AudioProcessor
+{
+    using juce::AudioProcessor::getXmlFromBinary;
+    using juce::AudioProcessor::copyXmlToBinary;
+};
+
 struct Note { double start, length; int note; float vel; };
 struct Result { float peak = 0.0f, rms = 0.0f; bool finite = true; };
 
@@ -382,13 +389,22 @@ int main (int argc, char** argv)
             for (const auto& p : kit.pads)
                 check (drumSoundIndex (p.sound) >= 0, kit.name + ": el sonido «" + p.sound + "» no existe");
             const bool ok = is (0, { "Bombo", "Cajón grave" }) && is (1, { "Caja", "Cajón golpe" })
+                         && is (4, { "Bombo", "Bajo 808", "Tumbadora" }) && is (5, { "Caja", "Aro", "Claves" })
                          && is (2, { "Charles cerrado", "Maraca" }) && is (3, { "Charles abierto", "Palmas" })
                          && kit.pads[12].sound == juce::String::fromUTF8 ("Nota pulsada")
-                         && kit.pads[13].sound == "Acorde" && kit.pads[14].sound == "Voz";
+                         && kit.pads[13].sound == "Acorde" && kit.pads[14].sound == "Voz"
+                         && (! kit.pads[2].sound.startsWith ("Charles") || kit.pads[6].sound.startsWith ("Charles"));
             check (ok, kit.name + ": los pads no siguen la distribución de Maschine");
             if (! ok) ++wrong;
         }
         std::printf ("\nDistribución de Maschine: %d de %d kits la siguen\n", (int) drumKits().size() - wrong, (int) drumKits().size());
+        for (const auto& kit : drumKits())
+        {
+            juce::String line = kit.name.paddedRight (' ', 14) + ":";
+            for (int pad = 0; pad < numPads; ++pad)
+                line << (pad % 4 == 0 ? "  |" : ",") << " " << juce::String (pad + 1) << " " << kit.pads[(size_t) pad].sound;
+            std::printf ("%s\n", line.toRawUTF8());
+        }
 
         // Los sonidos de la fila 4 suenan, a un nivel parecido al del resto de pads
         proc->applyKit (0);
@@ -409,12 +425,13 @@ int main (int argc, char** argv)
                 writeWav (wavDir.getChildFile ("pad " + juce::String (pad + 1) + " " + juce::File::createLegalFileName (drumKits()[0].pads[(size_t) pad].sound) + ".wav"), cap);
         }
 
-        // General MIDI: cada nota principal vuelve a su pad, y un bombo, caja y charles de archivo caen en la fila 1
+        // General MIDI: cada nota principal vuelve a su pad; bombo, caja y charles de archivo caen en la fila 1
+        // y el charles de pedal en el pad 7
         bool roundTrip = true;
         for (int pad = 0; pad < numPads; ++pad) roundTrip = roundTrip && noteToPad (padToNote (pad, 1), 1) == pad;
         check (roundTrip, "el mapa General MIDI no es reversible");
-        check (noteToPad (36, 1) == 0 && noteToPad (38, 1) == 1 && noteToPad (42, 1) == 2 && noteToPad (46, 1) == 3 && noteToPad (44, 1) == 2,
-               "General MIDI: bombo, caja y charles no caen en la fila 1");
+        check (noteToPad (36, 1) == 0 && noteToPad (38, 1) == 1 && noteToPad (42, 1) == 2 && noteToPad (46, 1) == 3 && noteToPad (44, 1) == 6,
+               "General MIDI: bombo, caja y charles no caen en su sitio");
     }
 
     //==========================================================================
@@ -460,6 +477,52 @@ int main (int argc, char** argv)
         check (other->drums.getPattern (2).steps[7][9] == 3, "el estado no recupera los patrones");
         check (other->getSynthPresetName() == presets[5].name, "el estado no recupera el nombre del preset");
         std::printf ("\nEstado guardado: %d bytes\n", (int) state.getSize());
+    }
+
+    // Un estado guardado con la distribución de pads antigua vuelve a la de Maschine;
+    // uno guardado con la actual conserva lo que hayas cambiado.
+    {
+        const auto& kits = drumKits();
+        int hipHop = 0;
+        for (int i = 0; i < (int) kits.size(); ++i)
+            if (kits[(size_t) i].name == "Hip hop") hipHop = i;
+        proc->applyKit (hipHop);
+        proc->setParam ("seq_bpm", 77.0f);
+        // Distribución antigua: bombo profundo en el pad 2, caja en el 3, palmas en el 5...
+        const char* old[] = { "Bombo seco", "Bombo profundo", "Caja vintage", "Caja (aro)", "Palmas", "Charles cerrado" };
+        for (int pad = 0; pad < 6; ++pad)
+            proc->setParam (padParamId (pad, "snd"), (float) drumSoundIndex (juce::String::fromUTF8 (old[pad])));
+        proc->drums.setStep (0, 1, 3, 2);
+
+        juce::MemoryBlock saved;
+        proc->getStateInformation (saved);
+        auto xml = StateXml::getXmlFromBinary (saved.getData(), (int) saved.getSize());
+        check (xml != nullptr && xml->getIntAttribute ("padLayout") == GeminisInstrumentProcessor::padLayoutVersion,
+               "el estado no guarda la versión de la distribución de pads");
+
+        // Con la versión actual se respeta lo que cambiaste
+        auto same = std::make_unique<GeminisInstrumentProcessor>();
+        same->setStateInformation (saved.getData(), (int) saved.getSize());
+        check ((int) same->getParam (padParamId (1, "snd")) == drumSoundIndex (juce::String::fromUTF8 ("Bombo profundo")),
+               "un estado actual pierde los cambios de los pads");
+
+        // Sin versión (guardado antes): pads y patrones de fábrica del kit, el resto se respeta
+        xml->removeAttribute ("padLayout");
+        juce::MemoryBlock older;
+        StateXml::copyXmlToBinary (*xml, older);
+        auto relaid = std::make_unique<GeminisInstrumentProcessor>();
+        relaid->setStateInformation (older.getData(), (int) older.getSize());
+        int wrongPads = 0;
+        for (int pad = 0; pad < numPads; ++pad)
+            if ((int) relaid->getParam (padParamId (pad, "snd")) != drumSoundIndex (kits[(size_t) hipHop].pads[(size_t) pad].sound))
+                ++wrongPads;
+        check (wrongPads == 0, "un estado antiguo no vuelve a la distribución de Maschine ("
+                                   + juce::String (wrongPads) + " pads mal)");
+        check (relaid->drums.getPattern (0).toString() == kits[(size_t) hipHop].patterns[0].toString(),
+               "un estado antiguo no recupera los patrones del kit");
+        check (relaid->getKit() == hipHop && std::abs (relaid->getParam ("seq_bpm") - 77.0f) < 0.5f,
+               "un estado antiguo pierde el kit o el tempo");
+        std::printf ("Estado antiguo de «Hip hop»: %d de 16 pads en su sitio\n", numPads - wrongPads);
     }
 
     //==========================================================================

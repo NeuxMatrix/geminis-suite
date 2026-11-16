@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(GeminisSuite VERSION 0.4.0 LANGUAGES C CXX)
+project(GeminisSuite VERSION 0.4.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -140,6 +140,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Source/inst/InstProcessor.cpp)
     target_compile_options(GeminisApp PRIVATE /utf-8 /bigobj)
   endif()
   target_compile_definitions(GeminisApp PRIVATE ${GEMINIS_DEFINES} GEMINIS_PROGRAMA=1)
+  # En Windows, ASIO: así aparecen las tarjetas de sonido con su propio driver (Maschine MK3,
+  # Focusrite, Audient...). Las cabeceras de Steinberg van en third_party/asio (GPLv3).
+  if(WIN32)
+    target_compile_definitions(GeminisApp PRIVATE JUCE_ASIO=1)
+    target_include_directories(GeminisApp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asio)
+  endif()
   target_link_libraries(GeminisApp
     PRIVATE
       GeminisAssets

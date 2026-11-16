@@ -54,7 +54,7 @@ Todos los modelos son diseños propios con nombres propios. No se usan marcas ni
   |---|---|---|
   | 4 (arriba) | 13-16 | Melodía (nota pulsada), acorde, voz y efecto |
   | 3 | 9-12 | Toms, cencerros, bloques o percusión secundaria (crash y ride en los kits acústicos) |
-  | 2 | 5-8 | Bombo secundario (o 808), caja secundaria (aro), shaker y percusión ligera (palmas) |
+  | 2 | 5-8 | Bombo secundario (o 808), caja secundaria (aro), otro charles (de pedal) y percusión ligera (palmas) |
   | 1 (abajo) | 1-4 | 1 bombo · 2 caja · 3 charles cerrado · 4 charles abierto |
 
 - **Mapa MIDI de Maschine** (pad 1 = C1, nota 36) o **General MIDI** (bombo 36, caja 38, charles 42 y 46...).
@@ -99,6 +99,11 @@ Después, vuelve a buscar plugins en tu DAW. En Maschine: Preferencias > Plug-in
   acoplan enseguida. El programa recuerda lo que elijas y también tus sonidos de cada modo.
 - Empieza a **44100 Hz**. «Windows Audio» ofrece 44100, 48000, 88200 y 96000 Hz aunque Windows
   trabaje a otra frecuencia, porque el programa convierte la frecuencia al abrir la tarjeta.
+- **Tarjetas de sonido con driver ASIO** (Maschine MK3, Focusrite, Audient...): en «Tipo de dispositivo» elige
+  **ASIO** y en «Dispositivo» tu tarjeta. Es la opción con menos latencia. Si no sale, instala el driver del
+  fabricante (en Maschine, desde Native Access). Muchos drivers ASIO solo dejan usar la tarjeta a un programa
+  a la vez: si no se abre, cierra el software de Maschine u otro programa de audio.
+- Si abres una batería guardada con una versión anterior, los pads vuelven a la distribución de Maschine.
 
 ## Compilar
 
