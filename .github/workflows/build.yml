@@ -11,6 +11,8 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - 'web/**'
+      - '.github/workflows/desplegar-web.yml'
   workflow_dispatch:
     inputs:
       macos:

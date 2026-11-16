@@ -1,0 +1,12 @@
+# Se copia al VPS en /opt/neux/apps/geminis/ y lo arranca deploy/arrancar.sh.
+# No publica puertos: el Caddy del VPS llega al contenedor por la red "web".
+services:
+  geminis:
+    image: ghcr.io/neuxmatrix/geminis-web:${TAG:-latest}
+    container_name: geminis
+    restart: unless-stopped
+    networks: [web]
+
+networks:
+  web:
+    external: true
