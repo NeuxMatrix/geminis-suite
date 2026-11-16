@@ -144,8 +144,9 @@ figcaption { color: var(--faint); font-size: 13px; margin-top: 10px; }
 .gainbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--green), var(--gold), var(--rose)); }
 
 /* Demos */
-.demos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
-@media (max-width: 720px) { .demos { grid-template-columns: 1fr; } }
+.demos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+@media (max-width: 860px) { .demos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .demos { grid-template-columns: 1fr; } }
 .play { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--edge); background: rgba(21,22,39,.75); color: var(--text); cursor: pointer; text-align: left; font: inherit; width: 100%; }
 .play:hover { border-color: var(--acc); }
 .play .ic { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--acc); color: #120d05; }
@@ -178,6 +179,12 @@ figcaption { color: var(--faint); font-size: 13px; margin-top: 10px; }
 .kits { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--edge); border: 1px solid var(--edge); border-radius: 14px; overflow: hidden; margin-top: 8px; }
 @media (max-width: 860px) { .kits { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .kit { background: var(--bg2); padding: 14px 16px; }
+.kit.play { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 0; border: 0; border-radius: 0; width: 100%; text-align: left; color: var(--text); font: inherit; cursor: pointer; box-shadow: none; }
+.kit.play:hover { background: var(--panel); }
+.kit.play.on { background: rgba(255,122,168,.12); box-shadow: inset 0 0 0 1px var(--rose); }
+.kit .kn { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font: 600 15px var(--body); }
+.kit .ic { width: 22px; height: 22px; background: var(--rose); color: #1a0710; }
+.kit .ic svg { width: 8px; height: 8px; }
 .kit b { font-size: 15px; display: flex; justify-content: space-between; gap: 8px; }
 .kit b span { font: 500 12px var(--mono); color: var(--rose); white-space: nowrap; }
 .kit small { color: var(--dim); font-size: 13px; line-height: 1.45; display: block; margin-top: 4px; }
@@ -295,11 +302,12 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: cent
 
       <div id="fx-sonido" style="margin-top:56px">
         <h3>Escucha los amplis</h3>
-        <p class="intro" style="margin-bottom:0">La misma guitarra pasada por tres amplis de Geminis FX, sin retoques.</p>
+        <p class="intro" style="margin-bottom:0">Una guitarra eléctrica real grabada en limpio, directa a la tarjeta de sonido. Primero tal cual y después la misma toma por tres presets de Geminis FX, sin retoques.</p>
         <div class="demos">
-          <button class="play" data-src="audio/cristal.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Cristal</b><small>Limpio</small></span></button>
-          <button class="play" data-src="audio/britannia.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Britannia</b><small>Crunch</small></span></button>
-          <button class="play" data-src="audio/titan.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Titán</b><small>Alta ganancia</small></span></button>
+          <button class="play" data-src="audio/guitarra-seca.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Sin efectos</b><small>La guitarra tal cual</small></span></button>
+          <button class="play" data-src="audio/cristal.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Cristal</b><small>Limpio cristalino</small></span></button>
+          <button class="play" data-src="audio/britannia.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Britannia</b><small>Crunch Britannia</small></span></button>
+          <button class="play" data-src="audio/titan.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Titán</b><small>Metal moderno</small></span></button>
         </div>
       </div>
 
@@ -318,6 +326,12 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: cent
           </div>
           <div class="presets">
             <span>Limpios <b>6</b></span><span>Crunch <b>7</b></span><span>Alta ganancia <b>4</b></span><span>Bajo <b>3</b></span><span>Ambientes <b>3</b></span><span>Efectos <b>4</b></span><span>Mezcla <b>6</b></span><span>Directo <b>2</b></span>
+          </div>
+          <div class="demos" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:28px">
+            <button class="play" data-src="audio/voz-seca.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Sin efectos</b><small>La voz tal cual</small></span></button>
+            <button class="play" data-src="audio/voz-pop.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Voz pop brillante</b><small>Ecualizador, de-esser y compresor</small></span></button>
+            <button class="play" data-src="audio/voz-coros.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Coros dobles</b><small>Doblador y reverb</small></span></button>
+            <button class="play" data-src="audio/voz-eterea.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Voz etérea</b><small>Delay y reverb amplia</small></span></button>
           </div>
         </div>
       </div>
@@ -370,9 +384,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: cent
             <li><b>Efectos</b>: saturación, compresor, chorus, phaser, flanger, delay y reverb.</li>
             <li><b>66 presets</b>: bajos, leads, pads, teclas, secuencias, industrial, futuristas, clásicos analógicos y ondas dibujadas.</li>
           </ul>
-          <div style="margin-top:28px; max-width:360px">
-            <button class="play" data-src="audio/instrument.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Demo de Geminis Instrument</b><small>Sinte, batería e instrumentos · 1 min</small></span></button>
-          </div>
+          
         </div>
       </div>
 
@@ -387,23 +399,24 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: cent
             <p class="hint">18 sonidos sintetizados y 29 acústicos grabados. Cada pad tiene afinación, caída, tono, golpe, saturación, panorama y grupo de corte.</p>
           </div>
         </div>
-        <div class="kits" style="margin-top:36px">
-          <div class="kit"><b>Rock <span>112 BPM</span></b><small>Acústica con pegada, para rock clásico y moderno.</small></div>
-          <div class="kit"><b>Metal <span>150 BPM</span></b><small>Doble bombo, caja seca y platos al frente.</small></div>
-          <div class="kit"><b>Funk <span>100 BPM</span></b><small>Caja con notas fantasma y charles abierto.</small></div>
-          <div class="kit"><b>Pop <span>110 BPM</span></b><small>Bombo y caja limpios con palmas y maraca.</small></div>
-          <div class="kit"><b>Electrónica <span>126 BPM</span></b><small>Bombo a negras y charles abiertos: pista de baile.</small></div>
-          <div class="kit"><b>Hip hop <span>90 BPM</span></b><small>Boom bap con swing y caja vintage.</small></div>
-          <div class="kit"><b>Trap <span>140 BPM</span></b><small>808 largo y charles con redobles.</small></div>
-          <div class="kit"><b>Techno <span>130 BPM</span></b><small>Bombo duro, ride y retumbo entre golpes.</small></div>
-          <div class="kit"><b>House <span>124 BPM</span></b><small>Palmas reales, charles abierto y congas.</small></div>
-          <div class="kit"><b>Industrial <span>115 BPM</span></b><small>Metal, yunque, ruido y bombos saturados.</small></div>
-          <div class="kit"><b>Lo-fi <span>80 BPM</span></b><small>Mucho swing y sonido de cinta gastada.</small></div>
-          <div class="kit"><b>Reguetón <span>95 BPM</span></b><small>El ritmo dembow con bombo a negras.</small></div>
-          <div class="kit"><b>Drum and bass <span>172 BPM</span></b><small>Breakbeat rápido con caja aguda.</small></div>
-          <div class="kit"><b>Jazz <span>130 BPM</span></b><small>Ride con swing y caja suave.</small></div>
-          <div class="kit"><b>Latina <span>100 BPM</span></b><small>Cajón, congas, bongós, claves y cencerro.</small></div>
-          <div class="kit"><b>Synthwave <span>110 BPM</span></b><small>Caja enorme con reverb y toms electrónicos.</small></div>
+        <p class="hint" style="margin-top:36px">Pulsa un kit para escuchar su primer patrón.</p>
+        <div class="kits" style="margin-top:12px">
+          <button class="kit play" data-src="audio/kits/rock.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Rock</span> <span>112 BPM</span></b><small>Acústica con pegada, para rock clásico y moderno.</small></button>
+          <button class="kit play" data-src="audio/kits/metal.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Metal</span> <span>150 BPM</span></b><small>Doble bombo, caja seca y platos al frente.</small></button>
+          <button class="kit play" data-src="audio/kits/funk.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Funk</span> <span>100 BPM</span></b><small>Caja con notas fantasma y charles abierto.</small></button>
+          <button class="kit play" data-src="audio/kits/pop.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Pop</span> <span>110 BPM</span></b><small>Bombo y caja limpios con palmas y maraca.</small></button>
+          <button class="kit play" data-src="audio/kits/electronica.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Electrónica</span> <span>126 BPM</span></b><small>Bombo a negras y charles abiertos: pista de baile.</small></button>
+          <button class="kit play" data-src="audio/kits/hip-hop.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Hip hop</span> <span>90 BPM</span></b><small>Boom bap con swing y caja vintage.</small></button>
+          <button class="kit play" data-src="audio/kits/trap.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Trap</span> <span>140 BPM</span></b><small>808 largo y charles con redobles.</small></button>
+          <button class="kit play" data-src="audio/kits/techno.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Techno</span> <span>130 BPM</span></b><small>Bombo duro, ride y retumbo entre golpes.</small></button>
+          <button class="kit play" data-src="audio/kits/house.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> House</span> <span>124 BPM</span></b><small>Palmas reales, charles abierto y congas.</small></button>
+          <button class="kit play" data-src="audio/kits/industrial.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Industrial</span> <span>115 BPM</span></b><small>Metal, yunque, ruido y bombos saturados.</small></button>
+          <button class="kit play" data-src="audio/kits/lo-fi.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Lo-fi</span> <span>80 BPM</span></b><small>Mucho swing y sonido de cinta gastada.</small></button>
+          <button class="kit play" data-src="audio/kits/regueton.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Reguetón</span> <span>95 BPM</span></b><small>El ritmo dembow con bombo a negras.</small></button>
+          <button class="kit play" data-src="audio/kits/drum-and-bass.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Drum and bass</span> <span>172 BPM</span></b><small>Breakbeat rápido con caja aguda.</small></button>
+          <button class="kit play" data-src="audio/kits/jazz.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Jazz</span> <span>130 BPM</span></b><small>Ride con swing y caja suave.</small></button>
+          <button class="kit play" data-src="audio/kits/latina.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Latina</span> <span>100 BPM</span></b><small>Cajón, congas, bongós, claves y cencerro.</small></button>
+          <button class="kit play" data-src="audio/kits/synthwave.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Synthwave</span> <span>110 BPM</span></b><small>Caja enorme con reverb y toms electrónicos.</small></button>
         </div>
       </div>
 
@@ -464,7 +477,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: cent
 <footer class="band">
   <div class="wrap">
     <span><b style="font-family:var(--display);letter-spacing:.12em;color:var(--gold)">GÉMINIS</b> · una suite de NeuxMatrix</span>
-    <span>Diseño, amplis y sonidos propios. Muestras de librerías CC0.</span>
+    <span>Diseño, amplis y sonidos propios. Muestras de librerías CC0. Demos: guitarra de <a href="https://github.com/GuitarML/GuitarLSTM">GuitarML</a> (GPL-3.0) y voz de Heather Barnett para <a href="https://www.openslr.org/12/">LibriSpeech</a> (CC BY 4.0).</span>
   </div>
 </footer>
 

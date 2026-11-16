@@ -2,6 +2,8 @@
 // 1) Pasa una guitarra sintética por cada módulo con sus valores por defecto, al mínimo y al máximo.
 // 2) Monta cada preset de fábrica como una cadena de módulos y escribe un WAV por preset.
 // Comprueba que la salida es finita, que no se dispara y que no queda en silencio.
+// Con «--entrada guitarra.wav voz.wav» usa esas grabaciones (mono, 48 kHz) en lugar de las sintéticas
+// y solo escribe los presets: así se hacen las demos de la web con guitarra y voz reales.
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "fx/Modules.h"
 #include "fx/FxPresets.h"
@@ -93,6 +95,17 @@ static Result runChain (std::vector<std::unique_ptr<Module>>& chain, const std::
     return res;
 }
 
+static std::vector<float> readWav (const juce::File& f)
+{
+    juce::AudioFormatManager fm;
+    fm.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (f));
+    if (r == nullptr) return {};
+    juce::AudioBuffer<float> b (1, (int) r->lengthInSamples);
+    r->read (&b, 0, b.getNumSamples(), 0, true, false);
+    return { b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples() };
+}
+
 static void writeWav (const juce::File& f, const juce::AudioBuffer<float>& buf, double sr)
 {
     f.deleteFile();
@@ -108,12 +121,22 @@ static void writeWav (const juce::File& f, const juce::AudioBuffer<float>& buf, 
 int main (int argc, char** argv)
 {
     const double sr = 48000.0;
-    const int block = 256, total = (int) (sr * 4.0);
+    const int block = 256;
+    int total = (int) (sr * 4.0);
     const juce::File outDir = argc > 1 ? juce::File (argv[1]) : juce::File::getCurrentWorkingDirectory();
     outDir.createDirectory();
 
-    const auto guitar = makeGuitar (sr, total);
-    const auto voice = makeVoice (sr, total);
+    const bool realInput = argc > 4 && juce::String (argv[2]) == "--entrada";
+    auto guitar = realInput ? readWav (juce::File (juce::String::fromUTF8 (argv[3]))) : makeGuitar (sr, total);
+    auto voice = realInput ? readWav (juce::File (juce::String::fromUTF8 (argv[4]))) : makeVoice (sr, total);
+    if (realInput)
+    {
+        if (guitar.empty() || voice.empty()) { std::cout << "No se pudieron leer las grabaciones\n"; return 1; }
+        // Las dos con la misma longitud para que cada preset use un solo búfer de salida.
+        total = (int) juce::jmax (guitar.size(), voice.size());
+        guitar.resize ((size_t) total, 0.0f);
+        voice.resize ((size_t) total, 0.0f);
+    }
     bool ok = true;
     int checks = 0;
 
@@ -138,7 +161,7 @@ int main (int argc, char** argv)
     }
 
     // 1) Cada módulo por separado, en tres posiciones de sus controles.
-    for (int t = 1; t < numTypes; ++t)
+    for (int t = 1; t < numTypes && ! realInput; ++t)
     {
         const auto& inf = info (t);
         for (int variant = 0; variant < 3; ++variant)
