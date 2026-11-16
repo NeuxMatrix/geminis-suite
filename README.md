@@ -44,10 +44,19 @@ Todos los modelos son diseños propios con nombres propios. No se usan marcas ni
 ### Batería por estilos
 - 16 kits con 4 patrones cada uno: rock, metal, funk, pop, electrónica, hip hop, trap, techno, house,
   industrial, lo-fi, reguetón, drum and bass, jazz, latina y synthwave.
-- 16 pads con el pad 1 abajo a la izquierda, como en Maschine. **Mapa MIDI de Maschine** (pad 1 = C1, nota 36)
-  o **General MIDI** (bombo 36, caja 38, charles 42...).
-- 18 sonidos sintetizados y 29 acústicos grabados. Cada pad tiene afinación, caída, tono, golpe, saturación,
-  nivel, panorama y grupo de corte.
+- 16 pads con el pad 1 abajo a la izquierda, como en Maschine, y los 16 kits con la misma distribución:
+
+  | Fila | Pads | Qué lleva |
+  |---|---|---|
+  | 4 (arriba) | 13-16 | Melodía (nota pulsada), acorde, voz y efecto |
+  | 3 | 9-12 | Toms, cencerros, bloques o percusión secundaria (crash y ride en los kits acústicos) |
+  | 2 | 5-8 | Bombo secundario (o 808), caja secundaria (aro), shaker y percusión ligera (palmas) |
+  | 1 (abajo) | 1-4 | 1 bombo · 2 caja · 3 charles cerrado · 4 charles abierto |
+
+- **Mapa MIDI de Maschine** (pad 1 = C1, nota 36) o **General MIDI** (bombo 36, caja 38, charles 42 y 46...).
+- 18 sonidos de batería sintetizados, 29 acústicos grabados y 3 melódicos (nota pulsada, acorde menor con
+  séptima y voz cantando «aa»), en do y transportables con la afinación. Cada pad tiene afinación, caída, tono,
+  golpe, saturación, nivel, panorama y grupo de corte.
 - Secuenciador de 16 o 32 pasos con acentos y swing que sigue al DAW o toca con su propio tempo.
   **Arrastra el patrón como MIDI** a tu DAW o a Maschine.
 
@@ -110,7 +119,8 @@ cmake --build build --target GeminisDspTest GeminisInstTest
 - `GeminisDspTest` pasa guitarra y voz de prueba por los 27 módulos y todos los presets de Geminis FX.
 - `GeminisInstTest` toca los 66 presets del sinte, los 16 kits y los 20 instrumentos, y mide sus niveles.
   También comprueba que la rueda de modulación curva el timbre, que responden los 16 pads con los dos mapas
-  MIDI y que el proyecto del DAW guarda y recupera todo. Con una carpeta como argumento escribe un WAV por caso.
+  MIDI, que los 16 kits siguen la distribución de Maschine, que «Windows Audio» se abre a 44100 Hz y que el
+  proyecto del DAW guarda y recupera todo. Con una carpeta como argumento escribe un WAV por caso.
 
 ## Estructura
 

@@ -10,8 +10,16 @@ namespace geminis::inst
 enum DrumModel { dmKick = 0, dmKickDeep, dmKickHard, dmSnare, dmSnareNoise, dmClap, dmHatClosed, dmHatOpen, dmTom, dmCymbal,
                  dmCowbell, dmRim, dmShaker, dmZap, dmBass808, dmMetal, dmNoise, dmGlitch, numDrumModels };
 
-/** Nombres de todos los sonidos: modelos sintetizados y muestras. */
+/** Sonidos sintetizados añadidos después de las muestras (así no cambia el sonido guardado
+    en proyectos anteriores): nota pulsada para melodías, acorde y voz. Van en la fila 4. */
+enum DrumLateModel { dlPluck = 0, dlChord, dlVoice, numLateDrumModels };
+
+/** Nombres de todos los sonidos: modelos sintetizados, muestras y los sonidos añadidos después. */
 const juce::StringArray& drumSoundNames();
+/** Número de muestras de batería. */
+int numDrumSamples();
+/** Índice del primer sonido añadido después de las muestras. */
+int firstLateDrumSound();
 int drumSoundIndex (const juce::String& name);       // -1 si no existe
 
 /** Patrón: velocidad por paso (0 apagado, 1 suave, 2 normal, 3 acento). */
@@ -41,7 +49,9 @@ struct DrumKit
 };
 
 const std::vector<DrumKit>& drumKits();
-/** Nombre corto de cada pad según su papel en el kit estándar de Geminis. */
+/** Nombre corto de cada pad según su papel en la distribución de Maschine:
+    fila 1 bombo, caja y charles; fila 2 refuerzos y percusión ligera; fila 3 toms y
+    percusión secundaria; fila 4 melodía, acorde, voz y efecto. */
 const juce::StringArray& padRoleNames();
 /** Nota MIDI de un pad en el mapa elegido (0 Maschine, 1 General MIDI). */
 int padToNote (int pad, int map);

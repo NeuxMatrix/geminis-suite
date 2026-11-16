@@ -368,6 +368,55 @@ int main (int argc, char** argv)
         check (sounding == numPads, "no responden todos los pads por MIDI");
     }
 
+    // Distribución de Maschine en los 16 kits: fila 1 bombo, caja y charles; fila 4 melodía, acorde, voz y efecto
+    {
+        int wrong = 0;
+        for (const auto& kit : drumKits())
+        {
+            auto is = [&kit] (int pad, std::initializer_list<const char*> words)
+            {
+                for (auto* w : words)
+                    if (kit.pads[(size_t) pad].sound.containsIgnoreCase (juce::String::fromUTF8 (w))) return true;
+                return false;
+            };
+            for (const auto& p : kit.pads)
+                check (drumSoundIndex (p.sound) >= 0, kit.name + ": el sonido «" + p.sound + "» no existe");
+            const bool ok = is (0, { "Bombo", "Cajón grave" }) && is (1, { "Caja", "Cajón golpe" })
+                         && is (2, { "Charles cerrado", "Maraca" }) && is (3, { "Charles abierto", "Palmas" })
+                         && kit.pads[12].sound == juce::String::fromUTF8 ("Nota pulsada")
+                         && kit.pads[13].sound == "Acorde" && kit.pads[14].sound == "Voz";
+            check (ok, kit.name + ": los pads no siguen la distribución de Maschine");
+            if (! ok) ++wrong;
+        }
+        std::printf ("\nDistribución de Maschine: %d de %d kits la siguen\n", (int) drumKits().size() - wrong, (int) drumKits().size());
+
+        // Los sonidos de la fila 4 suenan, a un nivel parecido al del resto de pads
+        proc->applyKit (0);
+        proc->setParam ("vol", testVolumeDb);
+        proc->setParam ("seq_mode", 0.0f);
+        proc->setParam ("midi_map", 0.0f);
+        const auto snare = render (*proc, 1.0, { { 0.0, 0.1, padToNote (1, 0), 0.9f } });
+        std::printf ("Fila 4 (respecto a la caja, %.1f dB de pico):\n", toDb (snare.peak) - testVolumeDb);
+        for (int pad = 12; pad < 16; ++pad)
+        {
+            juce::AudioBuffer<float> cap;
+            const auto r = render (*proc, 2.5, { { 0.0, 0.1, padToNote (pad, 0), 0.9f } }, &cap);
+            const float peakDb = toDb (r.peak) - toDb (snare.peak), rmsDb = toDb (r.rms) - testVolumeDb;
+            std::printf ("  pad %2d %-14s pico %5.1f dB   rms %6.1f dB\n", pad + 1, drumKits()[0].pads[(size_t) pad].sound.toRawUTF8(), peakDb, rmsDb);
+            check (r.finite && r.rms > 1.0e-4f, drumKits()[0].pads[(size_t) pad].sound + ": silencio");
+            check (peakDb > -12.0f && peakDb < 3.0f, drumKits()[0].pads[(size_t) pad].sound + ": nivel muy distinto al de la caja");
+            if (wavDir != juce::File())
+                writeWav (wavDir.getChildFile ("pad " + juce::String (pad + 1) + " " + juce::File::createLegalFileName (drumKits()[0].pads[(size_t) pad].sound) + ".wav"), cap);
+        }
+
+        // General MIDI: cada nota principal vuelve a su pad, y un bombo, caja y charles de archivo caen en la fila 1
+        bool roundTrip = true;
+        for (int pad = 0; pad < numPads; ++pad) roundTrip = roundTrip && noteToPad (padToNote (pad, 1), 1) == pad;
+        check (roundTrip, "el mapa General MIDI no es reversible");
+        check (noteToPad (36, 1) == 0 && noteToPad (38, 1) == 1 && noteToPad (42, 1) == 2 && noteToPad (46, 1) == 3 && noteToPad (44, 1) == 2,
+               "General MIDI: bombo, caja y charles no caen en la fila 1");
+    }
+
     //==========================================================================
     std::printf ("\n== INSTRUMENTOS: %d ==\n", (int) instrumentList().size());
     for (int i = 0; i < (int) instrumentList().size(); ++i)
