@@ -22,7 +22,7 @@ namespace
 
     // Mapa General MIDI de cada pad. Las notas 84-86 (fila 4) quedan fuera de la batería General MIDI
     // para que un archivo de batería no dispare la melodía, el acorde ni la voz.
-    const int gmNotes[numPads] = { 36, 38, 42, 46,   35, 37, 70, 39,   45, 48, 49, 51,   84, 85, 86, 29 };
+    const int gmNotes[numPads] = { 36, 38, 42, 46,   35, 37, 44, 39,   45, 48, 49, 51,   84, 85, 86, 29 };
 
     // Identificadores internos de las voces: después de los modelos va la muestra y luego los sonidos nuevos
     constexpr int vSample = numDrumModels;
@@ -66,7 +66,7 @@ int drumSoundIndex (const juce::String& name) { return drumSoundNames().indexOf 
 const juce::StringArray& padRoleNames()
 {
     static const juce::StringArray n { "Bombo", "Caja", "Charles", "Abierto",
-                                       "Bombo 2", "Caja 2", "Shaker", "Perc",
+                                       "Bombo 2", "Caja 2", "Charles 2", "Perc",
                                        "Tom grave", "Tom agudo", "Perc 2", "Perc 3",
                                        U ("Melodía"), "Acorde", "Voz", "FX" };
     return n;
@@ -86,12 +86,11 @@ int noteToPad (int note, int map)
     switch (note)
     {
         case 40: return 1;                                   // caja eléctrica
-        case 44: return 2;                                   // charles de pedal
         case 41: case 43: return 8;                          // toms graves
         case 47: case 50: return 9;                          // toms agudos
         case 52: case 55: case 57: return 10;                // otros platillos
         case 53: case 59: case 56: case 75: case 76: case 77: return 11;   // campana, cencerro, claves, bloques
-        case 54: case 69: case 82: return 6;                 // pandereta, cabasa, shaker
+        case 54: case 69: case 70: case 82: return 6;        // pandereta, cabasa, maracas, shaker
         case 60: case 61: case 62: case 63: case 64: case 80: case 81: return 7;   // bongós, congas, triángulo
         case 27: case 28: case 30: case 31: return 15;       // efectos
         default: return -1;

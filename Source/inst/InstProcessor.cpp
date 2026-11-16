@@ -231,6 +231,22 @@ void GeminisInstrumentProcessor::applyKit (int index)
     const auto& k = kits[(size_t) index];
 
     resetParams ([] (const juce::String& id) { return isFxParam (id) || isPadParam (id); });
+    applyKitPads (index);
+    setParam ("seq_bpm", (float) k.bpm);
+    setParam ("seq_swing", k.swing);
+    setParam ("seq_pattern", 0.0f);
+    for (const auto& [id, v] : k.extra) setParam (id, v);
+
+    kit = index;
+    kitName = k.name;
+    currentProgram = numSynthPrograms() + index;
+    if (getMode() != Mode::drums) mode.store ((int) Mode::drums);
+    notifyChanged();
+}
+
+void GeminisInstrumentProcessor::applyKitPads (int index)
+{
+    const auto& k = drumKits()[(size_t) index];
     for (int pad = 0; pad < numPads; ++pad)
     {
         const auto& pp = k.pads[(size_t) pad];
@@ -246,16 +262,6 @@ void GeminisInstrumentProcessor::applyKit (int index)
     }
     for (int i = 0; i < numPatterns; ++i)
         drums.setPattern (i, k.patterns[(size_t) i]);
-    setParam ("seq_bpm", (float) k.bpm);
-    setParam ("seq_swing", k.swing);
-    setParam ("seq_pattern", 0.0f);
-    for (const auto& [id, v] : k.extra) setParam (id, v);
-
-    kit = index;
-    kitName = k.name;
-    currentProgram = numSynthPrograms() + index;
-    if (getMode() != Mode::drums) mode.store ((int) Mode::drums);
-    notifyChanged();
 }
 
 void GeminisInstrumentProcessor::applyInstrument (int index)
@@ -361,6 +367,7 @@ void GeminisInstrumentProcessor::getStateInformation (juce::MemoryBlock& dest)
     state.setProperty ("synthPresetName", synthPresetName, nullptr);
     state.setProperty ("kit", kit, nullptr);
     state.setProperty ("kitName", kitName, nullptr);
+    state.setProperty ("padLayout", padLayoutVersion, nullptr);
     state.setProperty ("program", currentProgram, nullptr);
     state.setProperty ("drawn1", synth.getDrawnWave (0).toString(), nullptr);
     state.setProperty ("drawn2", synth.getDrawnWave (1).toString(), nullptr);
@@ -413,7 +420,23 @@ void GeminisInstrumentProcessor::setStateInformation (const void* data, int size
         }
     }
     if (snaps.isValid()) state.removeChild (snaps, nullptr);
+    const bool oldPadLayout = (int) state.getProperty ("padLayout", 0) < padLayoutVersion;
+    state.removeProperty ("padLayout", nullptr);
     apvts.replaceState (state);
+
+    // Guardado con una distribución de pads anterior: pads y patrones de fábrica del mismo kit
+    // (se busca por nombre), con la distribución de Maschine. El resto del estado se respeta.
+    if (oldPadLayout && kit >= 0)
+    {
+        const auto& kits = drumKits();
+        for (int i = 0; i < (int) kits.size(); ++i)
+            if (kits[(size_t) i].name == kitName) kit = i;
+        if (juce::isPositiveAndBelow (kit, (int) kits.size()))
+        {
+            kitName = kits[(size_t) kit].name;
+            applyKitPads (kit);
+        }
+    }
 
     juce::MessageManager::callAsync ([safe = juce::WeakReference<GeminisInstrumentProcessor> (this)]
     {

@@ -45,6 +45,10 @@ public:
 
     void applySynthPreset (int index);
     void applyKit (int index);
+
+    /** Versión de la distribución de los pads. Un estado guardado con una anterior recupera los pads
+        y patrones de fábrica de su kit, para que los pads sigan la distribución de Maschine. */
+    static constexpr int padLayoutVersion = 3;
     void applyInstrument (int index);
 
     int getSynthPreset() const noexcept { return synthPreset; }
@@ -76,6 +80,7 @@ public:
     std::function<void()> onPresetChanged;
 
 private:
+    void applyKitPads (int index);
     void timerCallback() override;
     void notifyChanged();
     void resetParams (const std::function<bool (const juce::String&)>& which);

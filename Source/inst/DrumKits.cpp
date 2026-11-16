@@ -216,7 +216,7 @@ const std::vector<DrumKit>& drumKits()
                 pad ("Charles abierto sintético", -3, 0.5f, 0.5f, 0.5f, 0.3f, 0.45f, 0.25f, 1),
 
                 pad ("Bombo profundo", -4, 0.6f, 0.4f, 0.5f, 0.4f, 0.7f),
-                pad ("Metal industrial", 0, 0.45f, 0.5f, 0.5f, 0.2f, 0.6f, 0.2f),
+                pad ("Caja eléctrica", -3, 0.45f, 0.45f, 0.6f, 0.5f, 0.6f, 0.2f),
                 pad ("Glitch", 0, 0.5f, 0.5f, 0.5f, 0, 0.45f, -0.3f),
                 pad ("Palmas sintéticas", -2, 0.5f, 0.5f, 0.5f, 0.4f, 0.65f),
 
@@ -331,6 +331,16 @@ const std::vector<DrumKit>& drumKits()
                 pat ({ { 1, "x.......x......." }, { 2, "....x..........." }, { 9, "..........x.x.xx" }, { 10, "........x.x....." }, { 11, "X..............." } }),
                 pat ({ { 1, "x...x...x...x..." }, { 2, "....x.......x..." }, { 3, "..x...x...x...x." }, { 16, "x..............." } }) },
                 { { "dr_vol", -7.5f }, { "fx_rev_on", 1 }, { "fx_rev_type", 1 }, { "fx_rev_size", 0.7f }, { "fx_rev_mix", 28 }, { "fx_cmp_on", 1 }, { "fx_cmp_amt", 0.3f } }));
+        }
+        // Fila 2, pad 7: otra variante de charles («hi-hats varios»), en los kits que tienen charles.
+        for (auto& kt : k)
+        {
+            const auto& closed = kt.pads[2];
+            auto& p7 = kt.pads[6];
+            if (! closed.sound.startsWith ("Charles") || p7.sound.startsWith ("Charles")) continue;
+            p7 = closed.sound.containsIgnoreCase ("sint")
+                   ? pad ("Charles cerrado sintético", closed.tune + 5.0f, 0.3f, 0.7f, 0.6f, 0, 0.42f, -0.25f)
+                   : pad ("Charles de pedal", 0, 0.5f, 0.5f, 0.5f, 0, 0.5f, -0.25f, 1);
         }
         return k;
     }();
