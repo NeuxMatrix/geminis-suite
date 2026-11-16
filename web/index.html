@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Géminis Suite</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Géminis Suite: rack de guitarra y voz, sintetizador de ondas que se curvan, batería por estilos e instrumentos. VST3 y AU para Windows y macOS.">
+<meta property="og:title" content="Géminis Suite">
+<meta property="og:description" content="Guitarra, voz, sintetizador, batería e instrumentos en dos plugins con diseño y sonidos propios.">
+<meta property="og:image" content="img/emblema.webp">
+<link rel="icon" href="img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: una noche estrellada que baja en dos mitades, oro (FX) y violeta (Instrument), como los gemelos del emblema. */
+:root {
+  color-scheme: dark;
+  --bg: #08080f;
+  --bg2: #0f0f1c;
+  --panel: #151627;
+  --edge: #2a2c47;
+  --text: #ecedf6;
+  --dim: #a3a7c2;
+  --faint: #6d7193;
+  --gold: #f3c96a;
+  --gold-deep: #c88a28;
+  --cyan: #8fe9ff;
+  --violet: #a78bfa;
+  --rose: #ff7aa8;
+  --green: #6ee7a8;
+  --display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --wrap: 1120px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+img { max-width: 100%; display: block; }
+a { color: var(--gold); }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 4px; }
+
+#stars { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.band { position: relative; z-index: 1; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: var(--wrap); margin: 0 auto; }
+
+/* Cabecera */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: rgba(8,8,15,.85); }
+header.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: rgba(8,8,15,.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(42,44,71,.6);
+}
+header.top .wrap { display: flex; align-items: center; gap: 24px; padding-block: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); font-family: var(--display); font-weight: 700; letter-spacing: .12em; }
+.brand img { width: 30px; height: 30px; border-radius: 50%; }
+nav.links { display: flex; gap: 22px; margin-left: auto; flex-wrap: wrap; }
+nav.links a { color: var(--dim); text-decoration: none; font-size: 14px; font-weight: 500; }
+nav.links a:hover { color: var(--text); }
+@media (max-width: 720px) { nav.links a:not(.cta-mini) { display: none; } }
+.cta-mini { color: var(--bg) !important; background: var(--gold); padding: 6px 14px; border-radius: 999px; font-weight: 600 !important; }
+
+/* Portada */
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 48px; align-items: center; padding-block: 72px 56px; }
+@media (max-width: 860px) { .hero .wrap { grid-template-columns: 1fr; padding-block: 40px 32px; text-align: center; } .hero .emblem { order: -1; max-width: 300px; margin: 0 auto; } }
+.eyebrow { font: 600 12px/1 var(--body); letter-spacing: .28em; text-transform: uppercase; color: var(--dim); }
+h1 {
+  font-family: var(--display); font-weight: 700; margin: 18px 0 8px;
+  font-size: clamp(56px, 10vw, 112px); line-height: 1.15; padding-top: .08em; letter-spacing: .06em;
+  background: linear-gradient(180deg, #fff4d4 0%, var(--gold) 45%, var(--gold-deep) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 28px rgba(243,201,106,.25));
+}
+.sub { font-family: var(--display); letter-spacing: .4em; color: #c9cbe6; font-size: clamp(13px, 1.6vw, 17px); margin: 0 0 28px; }
+.lede { font-size: 19px; color: var(--dim); max-width: 34em; margin: 0 0 32px; text-wrap: pretty; }
+@media (max-width: 860px) { .lede { margin-inline: auto; } }
+.actions { display: flex; gap: 14px; flex-wrap: wrap; }
+@media (max-width: 860px) { .actions { justify-content: center; } }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 12px; font-weight: 600; text-decoration: none; font-size: 15px; border: 1px solid transparent; cursor: pointer; font-family: var(--body); }
+.btn.gold { background: linear-gradient(180deg, var(--gold), var(--gold-deep)); color: #1a1205; box-shadow: 0 8px 30px -8px rgba(243,201,106,.5); }
+.btn.ghost { color: var(--text); border-color: var(--edge); background: rgba(21,22,39,.6); }
+.btn.ghost:hover { border-color: var(--faint); }
+.emblem { position: relative; }
+.emblem img { width: 100%; height: auto; filter: drop-shadow(0 0 60px rgba(123,92,255,.35)); animation: float 9s ease-in-out infinite; }
+@keyframes float { 50% { transform: translateY(-10px); } }
+@media (prefers-reduced-motion: reduce) { .emblem img { animation: none; } }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 36px; color: var(--faint); font: 500 13px/1 var(--mono); }
+@media (max-width: 860px) { .facts { justify-content: center; } }
+.facts span::before { content: "✦ "; color: var(--gold); }
+
+/* Secciones */
+section.band { padding-block: 88px; }
+@media (max-width: 720px) { section.band { padding-block: 56px; } }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(32px, 4.6vw, 52px); letter-spacing: .04em; line-height: 1.1; margin: 14px 0 16px; text-wrap: balance; }
+h3 { font-size: 22px; margin: 0 0 8px; letter-spacing: -.01em; }
+.intro { color: var(--dim); font-size: 18px; max-width: 40em; margin: 0 0 40px; text-wrap: pretty; }
+.fx { --acc: var(--gold); }
+.inst { --acc: var(--violet); }
+.tag { display: inline-flex; align-items: center; gap: 8px; color: var(--acc); }
+.tag::before { content: ""; width: 26px; height: 1px; background: currentColor; }
+
+.shot { border-radius: 14px; border: 1px solid var(--edge); overflow: hidden; background: var(--bg2); box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.02); }
+.shot img { width: 100%; height: auto; }
+figure { margin: 0; }
+figcaption { color: var(--faint); font-size: 13px; margin-top: 10px; }
+
+/* Selector de modo */
+.modes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 40px; }
+@media (max-width: 860px) { .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mode { background: rgba(21,22,39,.7); border: 1px solid var(--edge); border-radius: 14px; padding: 18px; }
+.mode b { display: block; font-size: 16px; margin-bottom: 4px; }
+.mode small { color: var(--dim); font-size: 13px; line-height: 1.45; display: block; }
+.mode i { font-style: normal; font: 600 11px/1 var(--body); letter-spacing: .18em; text-transform: uppercase; display: block; margin-bottom: 12px; }
+.mode.g i { color: var(--gold); } .mode.v i { color: var(--cyan); } .mode.s i { color: var(--violet); } .mode.d i { color: var(--rose); } .mode.n i { color: var(--cyan); }
+@media (max-width: 860px) { .mode:last-child { grid-column: 1 / -1; } }
+
+/* Rack */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: start; }
+.split.rev > :first-child { order: 2; }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr; gap: 28px; } .split.rev > :first-child { order: 0; } }
+.mods { display: grid; gap: 18px; }
+.cat { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+@media (max-width: 480px) { .cat { grid-template-columns: 1fr; gap: 6px; } }
+.cat > span { font: 600 11px/1.4 var(--body); letter-spacing: .16em; text-transform: uppercase; color: var(--c); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips em { font-style: normal; font-size: 13.5px; padding: 4px 10px; border-radius: 999px; background: rgba(21,22,39,.85); border: 1px solid var(--edge); color: var(--text); }
+
+.amps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 56px; }
+@media (max-width: 720px) { .amps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.amp { border: 1px solid var(--edge); border-radius: 14px; padding: 18px; background: linear-gradient(180deg, rgba(243,201,106,.07), rgba(21,22,39,.6)); }
+.amp b { font-family: var(--display); font-size: 20px; letter-spacing: .06em; color: var(--gold); display: block; }
+.amp small { color: var(--dim); font-size: 13.5px; }
+.gainbar { height: 4px; border-radius: 2px; background: var(--edge); margin-top: 14px; overflow: hidden; }
+.gainbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--green), var(--gold), var(--rose)); }
+
+/* Demos */
+.demos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+@media (max-width: 860px) { .demos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .demos { grid-template-columns: 1fr; } }
+.play { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--edge); background: rgba(21,22,39,.75); color: var(--text); cursor: pointer; text-align: left; font: inherit; width: 100%; }
+.play:hover { border-color: var(--acc); }
+.play .ic { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--acc); color: #120d05; }
+.play .ic svg { width: 14px; height: 14px; fill: currentColor; }
+.play b { display: block; font-size: 15px; }
+.play small { color: var(--dim); font-size: 13px; }
+.play.on { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc) inset; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 28px; font: 500 13px/1.4 var(--mono); color: var(--dim); }
+.presets b { color: var(--text); font-weight: 500; }
+.big-number { font-family: var(--display); font-size: 64px; line-height: 1; color: var(--acc); }
+
+.gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 48px; }
+@media (max-width: 720px) { .gallery { grid-template-columns: 1fr; } }
+
+/* Onda que se curva */
+.wavebox { border: 1px solid var(--edge); border-radius: 18px; background: radial-gradient(120% 140% at 50% 0%, rgba(123,92,255,.18), rgba(15,15,28,.9) 60%); padding: 22px; }
+.wavebox canvas { width: 100%; height: 220px; display: block; border-radius: 10px; background: rgba(5,6,15,.7); border: 1px solid rgba(167,139,250,.2); touch-action: none; }
+.wctrl { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; margin-top: 18px; }
+.wctrl label { font: 600 11px/1 var(--body); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); display: flex; align-items: center; gap: 12px; }
+.wctrl input[type=range] { width: 180px; accent-color: var(--violet); }
+.seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; flex-wrap: wrap; }
+.seg button { background: transparent; color: var(--dim); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
+.seg button[aria-pressed=true] { background: rgba(167,139,250,.2); color: var(--text); }
+.hint { color: var(--faint); font-size: 13px; margin-top: 12px; }
+#wplay { margin-left: auto; }
+@media (max-width: 560px) { #wplay { margin-left: 0; } }
+.btn.violet { background: var(--violet); color: #140c2b; }
+
+.kits { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--edge); border: 1px solid var(--edge); border-radius: 14px; overflow: hidden; margin-top: 8px; }
+@media (max-width: 860px) { .kits { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kit { background: var(--bg2); padding: 14px 16px; }
+.kit.play { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 0; border: 0; border-radius: 0; width: 100%; text-align: left; color: var(--text); font: inherit; cursor: pointer; box-shadow: none; }
+.kit.play:hover { background: var(--panel); }
+.kit.play.on { background: rgba(255,122,168,.12); box-shadow: inset 0 0 0 1px var(--rose); }
+.kit .kn { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font: 600 15px var(--body); }
+.kit .ic { width: 22px; height: 22px; background: var(--rose); color: #1a0710; }
+.kit .ic svg { width: 8px; height: 8px; }
+.kit b { font-size: 15px; display: flex; justify-content: space-between; gap: 8px; }
+.kit b span { font: 500 12px var(--mono); color: var(--rose); white-space: nowrap; }
+.kit small { color: var(--dim); font-size: 13px; line-height: 1.45; display: block; margin-top: 4px; }
+
+.pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-width: 260px; }
+.pads i { aspect-ratio: 1; border-radius: 7px; background: rgba(255,122,168,.1); border: 1px solid rgba(255,122,168,.3); display: grid; place-items: center; font: 500 11px var(--mono); font-style: normal; color: var(--dim); }
+.pads i.lit { background: rgba(255,122,168,.45); color: #fff; }
+
+.three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+@media (max-width: 860px) { .three { grid-template-columns: 1fr; } }
+.list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.list li { color: var(--dim); padding-left: 18px; position: relative; }
+.list li::before { content: ""; position: absolute; left: 0; top: .7em; width: 6px; height: 6px; border-radius: 50%; background: var(--acc); }
+.list li b { color: var(--text); font-weight: 600; }
+
+/* Compatibilidad y descarga */
+.daws { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 32px; }
+.daws span { font: 500 14px var(--body); padding: 8px 14px; border: 1px solid var(--edge); border-radius: 10px; background: rgba(21,22,39,.7); }
+.dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 720px) { .dl { grid-template-columns: 1fr; } }
+.dlcard { border: 1px solid var(--edge); border-radius: 18px; padding: 26px; background: rgba(15,15,28,.85); display: flex; flex-direction: column; gap: 10px; }
+.dlcard h3 { font-family: var(--display); letter-spacing: .05em; font-size: 24px; }
+.dlcard p { color: var(--dim); margin: 0 0 8px; font-size: 15px; }
+.dlcard .btn { align-self: flex-start; margin-top: auto; }
+.req { font: 500 12.5px/1.6 var(--mono); color: var(--faint); }
+
+footer { padding-block: 48px 64px; border-top: 1px solid var(--edge); color: var(--faint); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: center; justify-content: space-between; }
+</style>
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<header class="top band">
+  <div class="wrap">
+    <a class="brand" href="#inicio"><img src="img/favicon.png" alt="">GÉMINIS</a>
+    <nav class="links" aria-label="Secciones">
+      <a href="#fx">Geminis FX</a>
+      <a href="#instrument">Geminis Instrument</a>
+      <a href="#compatibilidad">Compatibilidad</a>
+      <a class="cta-mini" href="#descargar">Descargar</a>
+    </nav>
+  </div>
+</header>
+
+<main id="inicio">
+  <section class="hero band">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">NeuxMatrix presenta</div>
+        <h1>GÉMINIS</h1>
+        <p class="sub">SUITE DE AUDIO</p>
+        <p class="lede">Dos plugins gemelos para hacer música entera: un rack de guitarra y voz con amplis, pedales, delays y reverbs, y un instrumento con sintetizador de ondas que se curvan, batería por estilos e instrumentos reales.</p>
+        <div class="actions">
+          <a class="btn gold" href="#descargar">Descargar gratis</a>
+          <a class="btn ghost" href="#fx-sonido">▶ Escuchar los amplis</a>
+        </div>
+        <div class="facts"><span>VST3 y AU</span><span>Programa independiente</span><span>Windows y macOS</span><span>v0.3</span></div>
+      </div>
+      <div class="emblem"><img src="img/emblema.webp" alt="Emblema de Géminis: el símbolo zodiacal en oro y azul dentro de un círculo de constelaciones" width="640" height="640"></div>
+    </div>
+  </section>
+
+  <section class="band" style="padding-block-start: 32px">
+    <div class="wrap">
+      <div class="eyebrow">Al abrirlo</div>
+      <h2>Te pregunta qué vas a crear hoy</h2>
+      <p class="intro">Cada plugin arranca con una pantalla animada del emblema y te deja elegir el modo. No hay menús escondidos: eliges y estás tocando.</p>
+      <div class="split">
+        <figure class="shot"><img src="img/inicio-fx.webp" alt="Pantalla de inicio de Geminis FX con los modos Guitarra y Voz" width="1202" height="781"></figure>
+        <figure class="shot"><img src="img/inicio-instrument.webp" alt="Pantalla de inicio de Geminis Instrument con los modos Sintetizador, Batería e Instrumentos" width="1248" height="854"></figure>
+      </div>
+      <div class="modes">
+        <div class="mode g"><i>Geminis FX</i><b>Guitarra</b><small>Rack con amplis, pedales y afinador.</small></div>
+        <div class="mode v"><i>Geminis FX</i><b>Voz</b><small>Ecualizador, de-esser, doblador y afinación.</small></div>
+        <div class="mode s"><i>Instrument</i><b>Sintetizador</b><small>Ondas que se curvan y se dibujan.</small></div>
+        <div class="mode d"><i>Instrument</i><b>Batería</b><small>16 kits y secuenciador de pasos.</small></div>
+        <div class="mode n"><i>Instrument</i><b>Instrumentos</b><small>Piano, cuerdas, vientos y guitarras.</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GEMINIS FX -->
+  <section id="fx" class="band fx">
+    <div class="wrap">
+      <div class="eyebrow tag">Geminis FX · guitarra y voz</div>
+      <h2>Tu pedalera entera en diez huecos</h2>
+      <p class="intro">Pones Geminis FX en una pista de audio y montas la cadena que quieras: 27 módulos en el orden que elijas. Puedes poner dos delays y tres reverbs a la vez, cada uno distinto. Sirve en directo con monitorización o sobre pistas ya grabadas.</p>
+
+      <div class="split">
+        <figure>
+          <div class="shot"><img src="img/rack-guitarra.webp" alt="Rack de guitarra con puerta de ruido, compresor, amplificador Cristal y pantalla" width="1202" height="781"></div>
+          <figcaption>El rack de guitarra: la señal entra arriba y sale abajo. Cada módulo se enciende, se mueve o se quita.</figcaption>
+        </figure>
+        <div class="mods" aria-label="Módulos de Geminis FX">
+          <div class="cat" style="--c: var(--green)"><span>Dinámica</span><div class="chips"><em>Puerta de ruido</em><em>Compresor</em><em>Limitador</em></div></div>
+          <div class="cat" style="--c: #ffa26b"><span>Saturación</span><div class="chips"><em>Impulso</em><em>Furia</em><em>Nébula</em><em>Chispa</em><em>Octavador</em></div></div>
+          <div class="cat" style="--c: var(--gold)"><span>Amplis</span><div class="chips"><em>Amplificador</em><em>Pantalla con IR</em></div></div>
+          <div class="cat" style="--c: var(--rose)"><span>Filtro</span><div class="chips"><em>Wah Lunar</em><em>Ecualizador</em></div></div>
+          <div class="cat" style="--c: var(--violet)"><span>Modulación</span><div class="chips"><em>Chorus</em><em>Flanger</em><em>Phaser</em><em>Vibrato</em><em>Trémolo</em><em>Rotativo</em></div></div>
+          <div class="cat" style="--c: var(--cyan)"><span>Delay</span><div class="chips"><em>Digital</em><em>Cinta</em><em>Analógico</em><em>Ping-pong</em><em>Multitap</em><em>Inverso</em></div></div>
+          <div class="cat" style="--c: #9fb4ff"><span>Reverb</span><div class="chips"><em>Habitación</em><em>Sala</em><em>Placa</em><em>Muelle</em><em>Catedral</em><em>Shimmer</em></div></div>
+          <div class="cat" style="--c: var(--faint)"><span>Voz y color</span><div class="chips"><em>De-esser</em><em>Doblador</em><em>Afinación</em><em>Saturación de cinta</em><em>Lo-fi</em></div></div>
+        </div>
+      </div>
+
+      <div class="amps" aria-label="Amplificadores">
+        <div class="amp"><b>Cristal</b><small>Limpio brillante, para arpegios y funk.</small><div class="gainbar"><i style="width:18%"></i></div></div>
+        <div class="amp"><b>Dorado</b><small>Combo de 50 vatios, cálido y redondo.</small><div class="gainbar"><i style="width:36%"></i></div></div>
+        <div class="amp"><b>Britannia</b><small>Crunch británico que cruje al atacar.</small><div class="gainbar"><i style="width:54%"></i></div></div>
+        <div class="amp"><b>Corona</b><small>Británico caliente para solos.</small><div class="gainbar"><i style="width:68%"></i></div></div>
+        <div class="amp"><b>Titán</b><small>Alta ganancia moderna, apretada en graves.</small><div class="gainbar"><i style="width:92%"></i></div></div>
+        <div class="amp"><b>Abismo</b><small>Ampli de bajo con pantallas 1x15 y 4x10.</small><div class="gainbar"><i style="width:40%"></i></div></div>
+      </div>
+
+      <div id="fx-sonido" style="margin-top:56px">
+        <h3>Escucha los amplis</h3>
+        <p class="intro" style="margin-bottom:0">Una guitarra eléctrica real grabada en limpio, directa a la tarjeta de sonido. Primero tal cual y después la misma toma por tres presets de Geminis FX, sin retoques.</p>
+        <div class="demos">
+          <button class="play" data-src="audio/guitarra-seca.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Sin efectos</b><small>La guitarra tal cual</small></span></button>
+          <button class="play" data-src="audio/cristal.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Cristal</b><small>Limpio cristalino</small></span></button>
+          <button class="play" data-src="audio/britannia.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Britannia</b><small>Crunch Britannia</small></span></button>
+          <button class="play" data-src="audio/titan.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Titán</b><small>Metal moderno</small></span></button>
+        </div>
+      </div>
+
+      <div class="split rev" style="margin-top:72px; align-items:center">
+        <figure>
+          <div class="shot"><img src="img/rack-voz.webp" alt="Rack de voz con ecualizador vocal, de-esser y compresor" width="1202" height="781"></div>
+        </figure>
+        <div>
+          <h3>Modo Voz</h3>
+          <p class="intro" style="margin-bottom:24px">Una cadena pensada para cantar: limpia, controla las eses, iguala el volumen y da aire. Con doblador para engordar coros y afinación para corregir sin que se note.</p>
+          <div style="display:flex; gap:28px; flex-wrap:wrap; align-items:flex-end">
+            <div><div class="big-number">35</div><div class="eyebrow" style="margin-top:8px">presets de fábrica</div></div>
+            <div class="presets" style="margin-top:0">
+              <span><b>23</b> de guitarra</span><span><b>12</b> de voz</span>
+            </div>
+          </div>
+          <div class="presets">
+            <span>Limpios <b>6</b></span><span>Crunch <b>7</b></span><span>Alta ganancia <b>4</b></span><span>Bajo <b>3</b></span><span>Ambientes <b>3</b></span><span>Efectos <b>4</b></span><span>Mezcla <b>6</b></span><span>Directo <b>2</b></span>
+          </div>
+          <div class="demos" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:28px">
+            <button class="play" data-src="audio/voz-seca.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Sin efectos</b><small>La voz tal cual</small></span></button>
+            <button class="play" data-src="audio/voz-pop.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Voz pop brillante</b><small>Ecualizador, de-esser y compresor</small></span></button>
+            <button class="play" data-src="audio/voz-coros.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Coros dobles</b><small>Doblador y reverb</small></span></button>
+            <button class="play" data-src="audio/voz-eterea.mp3" type="button"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span><span><b>Voz etérea</b><small>Delay y reverb amplia</small></span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="gallery">
+        <figure><div class="shot"><img src="img/rack-ambiente-dos-delays.webp" alt="Rack de ambiente con dos delays y dos reverbs a la vez" width="1202" height="781"></div><figcaption>Dos delays y dos reverbs en la misma cadena.</figcaption></figure>
+        <div style="align-self:center">
+          <ul class="list">
+            <li><b>Afinador</b> siempre a mano en la barra superior.</li>
+            <li><b>Entrada mono o estéreo</b>, eligiendo el canal izquierdo o derecho de tu interfaz.</li>
+            <li><b>Carga tus propias IR</b> en la pantalla o usa las respuestas propias incluidas.</li>
+            <li><b>Tus presets</b> se guardan en Documentos/Geminis/Presets FX.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GEMINIS INSTRUMENT -->
+  <section id="instrument" class="band inst">
+    <div class="wrap">
+      <div class="eyebrow tag">Geminis Instrument · MIDI</div>
+      <h2>Una onda que se dobla mientras suena</h2>
+      <p class="intro">El sintetizador de Géminis parte de once ondas y las curva. El mando CURVA las dobla y el timbre cambia según las doblas. Pruébalo aquí: mueve el mando, cambia la manera de curvar o dibuja tu propia onda con el ratón o el dedo.</p>
+
+      <div class="wavebox">
+        <canvas id="wave" aria-label="Onda del oscilador. Arrastra para dibujarla."></canvas>
+        <div class="wctrl">
+          <label for="curva">Curva <input id="curva" type="range" min="0" max="100" value="45"></label>
+          <div class="seg" role="group" aria-label="Manera de curvar">
+            <button type="button" data-m="curvar" aria-pressed="true">Curvar</button>
+            <button type="button" data-m="plegar" aria-pressed="false">Plegar</button>
+            <button type="button" data-m="sincro" aria-pressed="false">Sincro</button>
+            <button type="button" data-m="formante" aria-pressed="false">Formante</button>
+            <button type="button" data-m="bits" aria-pressed="false">Bits</button>
+          </div>
+          <button id="wplay" class="btn violet" type="button">▶ Escuchar la onda</button>
+        </div>
+        <p class="hint">Una muestra de lo que hace el oscilador del plugin. En Geminis Instrument hay dos, con unísono de hasta 7 voces, sub, ruido, FM y modulación en anillo.</p>
+      </div>
+
+      <div class="split" style="margin-top:64px">
+        <figure><div class="shot"><img src="img/sintetizador-onda-dibujada.webp" alt="Sintetizador de Geminis Instrument con una onda dibujada a mano" width="1248" height="854"></div><figcaption>El sintetizador con una onda dibujada a mano en el oscilador 1.</figcaption></figure>
+        <div>
+          <h3>Sintetizador modular</h3>
+          <ul class="list" style="margin-top:14px">
+            <li><b>Cinco maneras de curvar</b> sobre once ondas de partida, o una onda tuya.</li>
+            <li><b>Filtro de cinco tipos</b> con saturación, tres envolventes y dos LFO sincronizables.</li>
+            <li><b>Matriz de 6 modulaciones</b>. En muchos presets la rueda de modulación curva la onda.</li>
+            <li><b>Efectos</b>: saturación, compresor, chorus, phaser, flanger, delay y reverb.</li>
+            <li><b>66 presets</b>: bajos, leads, pads, teclas, secuencias, industrial, futuristas, clásicos analógicos y ondas dibujadas.</li>
+          </ul>
+          
+        </div>
+      </div>
+
+      <div style="margin-top:88px">
+        <div class="eyebrow tag" style="--acc: var(--rose)">Batería</div>
+        <h2 style="font-size:clamp(28px,3.6vw,40px)">16 kits, cada uno con su estilo y su tempo</h2>
+        <div class="split" style="margin-top:28px; align-items:center">
+          <figure><div class="shot"><img src="img/bateria.webp" alt="Batería de Geminis Instrument con 16 pads y secuenciador" width="1248" height="854"></div></figure>
+          <div>
+            <p class="intro" style="margin-bottom:22px">16 pads con el pad 1 abajo a la izquierda, como en Maschine. Elige el mapa MIDI de Maschine (pad 1 = C1, nota 36) o General MIDI. Secuenciador de 16 o 32 pasos con acentos y swing, y arrastra el patrón como MIDI a tu DAW.</p>
+            <div class="pads" id="pads" aria-hidden="true"></div>
+            <p class="hint">18 sonidos sintetizados y 29 acústicos grabados. Cada pad tiene afinación, caída, tono, golpe, saturación, panorama y grupo de corte.</p>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:36px">Pulsa un kit para escuchar su primer patrón.</p>
+        <div class="kits" style="margin-top:12px">
+          <button class="kit play" data-src="audio/kits/rock.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Rock</span> <span>112 BPM</span></b><small>Acústica con pegada, para rock clásico y moderno.</small></button>
+          <button class="kit play" data-src="audio/kits/metal.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Metal</span> <span>150 BPM</span></b><small>Doble bombo, caja seca y platos al frente.</small></button>
+          <button class="kit play" data-src="audio/kits/funk.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Funk</span> <span>100 BPM</span></b><small>Caja con notas fantasma y charles abierto.</small></button>
+          <button class="kit play" data-src="audio/kits/pop.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Pop</span> <span>110 BPM</span></b><small>Bombo y caja limpios con palmas y maraca.</small></button>
+          <button class="kit play" data-src="audio/kits/electronica.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Electrónica</span> <span>126 BPM</span></b><small>Bombo a negras y charles abiertos: pista de baile.</small></button>
+          <button class="kit play" data-src="audio/kits/hip-hop.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Hip hop</span> <span>90 BPM</span></b><small>Boom bap con swing y caja vintage.</small></button>
+          <button class="kit play" data-src="audio/kits/trap.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Trap</span> <span>140 BPM</span></b><small>808 largo y charles con redobles.</small></button>
+          <button class="kit play" data-src="audio/kits/techno.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Techno</span> <span>130 BPM</span></b><small>Bombo duro, ride y retumbo entre golpes.</small></button>
+          <button class="kit play" data-src="audio/kits/house.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> House</span> <span>124 BPM</span></b><small>Palmas reales, charles abierto y congas.</small></button>
+          <button class="kit play" data-src="audio/kits/industrial.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Industrial</span> <span>115 BPM</span></b><small>Metal, yunque, ruido y bombos saturados.</small></button>
+          <button class="kit play" data-src="audio/kits/lo-fi.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Lo-fi</span> <span>80 BPM</span></b><small>Mucho swing y sonido de cinta gastada.</small></button>
+          <button class="kit play" data-src="audio/kits/regueton.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Reguetón</span> <span>95 BPM</span></b><small>El ritmo dembow con bombo a negras.</small></button>
+          <button class="kit play" data-src="audio/kits/drum-and-bass.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Drum and bass</span> <span>172 BPM</span></b><small>Breakbeat rápido con caja aguda.</small></button>
+          <button class="kit play" data-src="audio/kits/jazz.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Jazz</span> <span>130 BPM</span></b><small>Ride con swing y caja suave.</small></button>
+          <button class="kit play" data-src="audio/kits/latina.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Latina</span> <span>100 BPM</span></b><small>Cajón, congas, bongós, claves y cencerro.</small></button>
+          <button class="kit play" data-src="audio/kits/synthwave.mp3" type="button"><b><span class="kn"><span class="ic"><svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg></span> Synthwave</span> <span>110 BPM</span></b><small>Caja enorme con reverb y toms electrónicos.</small></button>
+        </div>
+      </div>
+
+      <div style="margin-top:88px">
+        <div class="eyebrow tag" style="--acc: var(--cyan)">Instrumentos</div>
+        <h2 style="font-size:clamp(28px,3.6vw,40px)">20 instrumentos para completar la canción</h2>
+        <div class="split" style="margin-top:28px">
+          <div class="three" style="grid-template-columns:1fr 1fr; --acc: var(--cyan)">
+            <div><h3 style="font-size:17px">Con muestras grabadas</h3><ul class="list"><li>Piano vertical</li><li>Piano eléctrico FM</li><li>Órgano de tubos</li><li>Cuerdas y pizzicato</li><li>Contrabajo y arpa</li><li>Metales y flauta</li><li>Saxo tenor</li><li>Marimba, vibráfono, glockenspiel y kalimba</li></ul></div>
+            <div><h3 style="font-size:17px">De cuerda física</h3><ul class="list"><li>Bajo eléctrico con dedos</li><li>Bajo eléctrico con púa</li><li>Guitarra acústica</li><li>Guitarra de nylon</li><li>Eléctrica limpia</li><li>Eléctrica muteada</li></ul></div>
+          </div>
+          <figure><div class="shot"><img src="img/instrumentos.webp" alt="Modo Instrumentos de Geminis Instrument" width="1248" height="854"></div><figcaption>Las muestras vienen de librerías libres (CC0). Las guitarras y bajos se generan modelando la cuerda.</figcaption></figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPATIBILIDAD -->
+  <section id="compatibilidad" class="band fx">
+    <div class="wrap">
+      <div class="eyebrow tag">Compatibilidad</div>
+      <h2>Funciona donde ya haces música</h2>
+      <p class="intro">VST3 en Windows y macOS, AU en macOS, y los dos plugins también como programa independiente para tocar sin abrir el DAW.</p>
+      <div class="daws"><span>Cubase</span><span>Ableton Live</span><span>Logic Pro</span><span>Reaper</span><span>FL Studio</span><span>Maschine</span></div>
+      <div class="three">
+        <div><h3>En todos los modos</h3><ul class="list"><li>Teclado en pantalla y teclado del ordenador (A S D F G H J K; Z y X cambian de octava).</li><li>Ventana escalable del 60 % al 140 %.</li><li>Limitador suave a la salida para no saturar nunca el DAW.</li></ul></div>
+        <div><h3>Con Maschine</h3><ul class="list"><li>Carga Geminis Instrument en un Sound.</li><li>Los pads siguen el orden de Maschine.</li><li>Arrastra los patrones como MIDI.</li></ul></div>
+        <div><h3>Programa independiente</h3><ul class="list"><li>Pide 44100 Hz por defecto.</li><li>Recuerda tu interfaz de audio y tu MIDI.</li><li>Entrada silenciada al empezar para que no se acople.</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DESCARGA -->
+  <section id="descargar" class="band fx">
+    <div class="wrap">
+      <div class="eyebrow tag">Descargar</div>
+      <h2>Géminis Suite 0.3</h2>
+      <p class="intro">Un solo instalador trae los dos plugins y los dos programas.</p>
+      <div class="dl">
+        <div class="dlcard">
+          <h3>Windows</h3>
+          <p>Instalador clásico: copia los VST3 a Common Files, crea accesos en el menú Inicio y se desinstala desde «Aplicaciones instaladas».</p>
+          <div class="req">Windows 10 u 11 · 64 bits · VST3</div>
+          <a class="btn gold" href="https://github.com/NeuxMatrix/geminis-suite/releases/latest">Descargar para Windows</a>
+        </div>
+        <div class="dlcard">
+          <h3>macOS</h3>
+          <p>VST3 y AU para Logic, Ableton, Cubase o Maschine, más los dos programas independientes.</p>
+          <div class="req">macOS 10.13 o posterior · Apple Silicon e Intel · VST3 y AU</div>
+          <a class="btn ghost" href="https://github.com/NeuxMatrix/geminis-suite/releases/latest">Descargar para macOS</a>
+        </div>
+      </div>
+      <p class="hint" style="margin-top:20px">El instalador aún no está firmado. Si Windows avisa con «Windows protegió su PC», pulsa «Más información» y luego «Ejecutar de todas formas». Después, vuelve a buscar plugins en tu DAW.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="band">
+  <div class="wrap">
+    <span><b style="font-family:var(--display);letter-spacing:.12em;color:var(--gold)">GÉMINIS</b> · una suite de NeuxMatrix</span>
+    <span>Diseño, amplis y sonidos propios. Muestras de librerías CC0. Demos: guitarra de <a href="https://github.com/GuitarML/GuitarLSTM">GuitarML</a> (GPL-3.0) y voz de Heather Barnett para <a href="https://www.openslr.org/12/">LibriSpeech</a> (CC BY 4.0).</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* Cielo estrellado */
+  const sc = document.getElementById('stars'), sx = sc.getContext('2d');
+  let stars = [];
+  function sizeStars() {
+    const d = Math.min(devicePixelRatio || 1, 2);
+    sc.width = innerWidth * d; sc.height = innerHeight * d;
+    sx.setTransform(d, 0, 0, d, 0, 0);
+    const n = Math.round(innerWidth * innerHeight / 5200);
+    stars = Array.from({ length: n }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: Math.random() * 1.1 + .2, p: Math.random() * 6.28, s: Math.random() * .8 + .2, gold: Math.random() < .12 }));
+  }
+  function drawStars(t) {
+    sx.clearRect(0, 0, innerWidth, innerHeight);
+    const g = sx.createRadialGradient(innerWidth * .7, innerHeight * .15, 0, innerWidth * .7, innerHeight * .15, innerWidth * .7);
+    g.addColorStop(0, 'rgba(60,40,140,.22)'); g.addColorStop(1, 'rgba(8,8,15,0)');
+    sx.fillStyle = g; sx.fillRect(0, 0, innerWidth, innerHeight);
+    for (const s of stars) {
+      const a = .35 + .65 * (reduce ? .7 : (Math.sin(t / 1000 * s.s + s.p) * .5 + .5));
+      sx.fillStyle = s.gold ? `rgba(243,201,106,${a})` : `rgba(220,226,255,${a * .8})`;
+      sx.beginPath(); sx.arc(s.x, s.y, s.r, 0, 6.283); sx.fill();
+    }
+    if (!reduce) requestAnimationFrame(drawStars);
+  }
+  sizeStars(); addEventListener('resize', sizeStars); requestAnimationFrame(drawStars);
+
+  /* Demos de audio */
+  const audio = new Audio(); let current = null;
+  function setOn(btn, on) { btn.classList.toggle('on', on); btn.querySelector('.ic').innerHTML = on ? '<svg viewBox="0 0 10 10"><path d="M2 1h2v8H2zM6 1h2v8H6z"/></svg>' : '<svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg>'; }
+  document.querySelectorAll('.play').forEach(btn => btn.addEventListener('click', () => {
+    if (current === btn && !audio.paused) { audio.pause(); setOn(btn, false); return; }
+    if (current) setOn(current, false);
+    current = btn; audio.src = btn.dataset.src; audio.play().catch(() => {}); setOn(btn, true);
+  }));
+  audio.addEventListener('ended', () => current && setOn(current, false));
+
+  /* Onda que se curva */
+  const N = 512, cv = document.getElementById('wave'), cx = cv.getContext('2d');
+  const curva = document.getElementById('curva');
+  let mode = 'curvar', drawn = null;
+  const base = i => drawn ? drawn[i] : Math.sin(2 * Math.PI * i / N);
+  const sampleBase = ph => { ph = ((ph % 1) + 1) % 1; const f = ph * N, i = Math.floor(f) % N, j = (i + 1) % N, k = f - Math.floor(f); return base(i) * (1 - k) + base(j) * k; };
+  function shape() {
+    const a = curva.value / 100, out = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const ph = i / N; let v;
+      if (mode === 'curvar') { const e = Math.pow(8, a * 1.4 - .2); v = sampleBase(Math.pow(ph, e)); }
+      else if (mode === 'plegar') { v = Math.sin(Math.asin(Math.max(-1, Math.min(1, sampleBase(ph)))) * (1 + a * 5)); }
+      else if (mode === 'sincro') { v = sampleBase(ph * (1 + a * 5)); }
+      else if (mode === 'formante') { const w = 1 - a * .8; v = ph < w ? sampleBase(ph / w * (1 + a * 3)) * (1 - ph / w * .3) : 0; }
+      else { const steps = Math.max(2, Math.round(32 - a * 29)); v = Math.round(sampleBase(Math.floor(ph * steps * 2) / (steps * 2)) * steps / 4) / (steps / 4); }
+      out[i] = Math.max(-1, Math.min(1, v));
+    }
+    return out;
+  }
+  function drawWave() {
+    const d = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * d; cv.height = h * d; cx.setTransform(d, 0, 0, d, 0, 0);
+    cx.clearRect(0, 0, w, h);
+    cx.strokeStyle = 'rgba(167,139,250,.12)'; cx.lineWidth = 1;
+    for (let k = 1; k < 8; k++) { cx.beginPath(); cx.moveTo(w * k / 8, 0); cx.lineTo(w * k / 8, h); cx.stroke(); }
+    cx.beginPath(); cx.moveTo(0, h / 2); cx.lineTo(w, h / 2); cx.strokeStyle = 'rgba(167,139,250,.25)'; cx.stroke();
+    const s = shape(), y = v => h / 2 - v * h * .4;
+    // dos ciclos, el primero violeta y el segundo cian
+    const grad = cx.createLinearGradient(0, 0, w, 0); grad.addColorStop(0, '#a78bfa'); grad.addColorStop(1, '#8fe9ff');
+    cx.beginPath();
+    for (let c = 0; c < 2; c++) for (let i = 0; i < N; i++) { const x = (c * N + i) / (2 * N) * w; (c || i) ? cx.lineTo(x, y(s[i])) : cx.moveTo(x, y(s[i])); }
+    cx.lineTo(w, y(s[0]));
+    cx.strokeStyle = grad; cx.lineWidth = 2.5; cx.shadowColor = 'rgba(167,139,250,.6)'; cx.shadowBlur = 12; cx.stroke(); cx.shadowBlur = 0;
+    cx.lineTo(w, h / 2); cx.lineTo(0, h / 2); cx.closePath();
+    const fill = cx.createLinearGradient(0, 0, 0, h); fill.addColorStop(0, 'rgba(167,139,250,.18)'); fill.addColorStop(.5, 'rgba(167,139,250,0)'); fill.addColorStop(1, 'rgba(143,233,255,.12)');
+    cx.fillStyle = fill; cx.fill();
+    updateSound(s);
+  }
+  // Dibujar con el ratón: lo dibujado en cualquiera de los dos ciclos se vuelve la onda de partida
+  let painting = false, last = null;
+  function paint(e) {
+    const r = cv.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+    const v = Math.max(-1, Math.min(1, (.5 - fy) / .4)), i = Math.floor(((fx * 2) % 1) * N);
+    if (!drawn) { drawn = new Float32Array(N); for (let k = 0; k < N; k++) drawn[k] = Math.sin(2 * Math.PI * k / N); }
+    const from = last ?? i, steps = Math.abs(i - from) < N / 2 ? Math.abs(i - from) : 0;
+    for (let k = 0; k <= steps; k++) { const j = Math.round(from + (i - from) * (steps ? k / steps : 1)); drawn[(j + N) % N] = v; }
+    for (let k = -3; k <= 3; k++) drawn[(i + k + N) % N] = v;
+    last = i; drawWave();
+  }
+  cv.addEventListener('pointerdown', e => { painting = true; last = null; cv.setPointerCapture(e.pointerId); paint(e); });
+  cv.addEventListener('pointermove', e => painting && paint(e));
+  addEventListener('pointerup', () => { painting = false; last = null; });
+  curva.addEventListener('input', drawWave);
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.m; document.querySelectorAll('.seg button').forEach(o => o.setAttribute('aria-pressed', o === b)); drawWave();
+  }));
+  addEventListener('resize', drawWave);
+
+  // Sonido: la forma de onda se convierte en armónicos y suena como una nota de sinte
+  let ctx = null, osc = null, gain = null;
+  function periodic(s) {
+    const H = 64, re = new Float32Array(H), im = new Float32Array(H);
+    for (let k = 1; k < H; k++) { let a = 0, b = 0; for (let i = 0; i < N; i++) { const t = 2 * Math.PI * k * i / N; a += s[i] * Math.cos(t); b += s[i] * Math.sin(t); } re[k] = a / N * 2; im[k] = b / N * 2; }
+    return ctx.createPeriodicWave(re, im);
+  }
+  function updateSound(s) { if (osc) osc.setPeriodicWave(periodic(s)); }
+  const wplay = document.getElementById('wplay');
+  wplay.addEventListener('click', () => {
+    if (osc) { gain.gain.setTargetAtTime(0, ctx.currentTime, .05); const o = osc; osc = null; setTimeout(() => o.stop(), 300); wplay.textContent = '▶ Escuchar la onda'; return; }
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx.resume();
+    osc = ctx.createOscillator(); gain = ctx.createGain();
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200;
+    osc.frequency.value = 110; osc.setPeriodicWave(periodic(shape()));
+    gain.gain.value = 0; gain.gain.setTargetAtTime(.18, ctx.currentTime, .03);
+    osc.connect(lp).connect(gain).connect(ctx.destination); osc.start();
+    wplay.textContent = '■ Parar';
+  });
+  drawWave();
+
+  /* Pads: un patrón de rock que se ilumina */
+  const pads = document.getElementById('pads');
+  const labels = ['C1','C#1','D1','D#1','E1','F1','F#1','G1','G#1','A1','A#1','B1','C2','C#2','D2','D#2'];
+  const order = [12,13,14,15, 8,9,10,11, 4,5,6,7, 0,1,2,3];  // pad 1 abajo a la izquierda
+  const cells = order.map(n => { const i = document.createElement('i'); i.textContent = labels[n]; pads.appendChild(i); return i; });
+  const padEl = n => cells[order.indexOf(n)];
+  const kick = [1,0,0,0, 0,0,1,0, 1,0,1,0, 0,0,0,0], snare = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1];
+  let step = 0;
+  if (!reduce) setInterval(() => {
+    cells.forEach(c => c.classList.remove('lit'));
+    if (kick[step]) padEl(0).classList.add('lit');
+    if (snare[step]) padEl(1).classList.add('lit');
+    if (step % 2 === 0) padEl(2).classList.add('lit');
+    step = (step + 1) % 16;
+  }, 60000 / 112 / 4);
+})();
+</script>
+</body>
+</html>
