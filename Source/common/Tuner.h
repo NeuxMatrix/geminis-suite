@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_basics/juce_audio_basics.h>
+#include "DspCommon.h"
 #include <vector>
 #include <cmath>
 
@@ -39,13 +40,22 @@ public:
         // Diezmado sencillo para analizar entre 30 Hz y 1,2 kHz
         const int decim = sampleRate > 60000.0 ? 8 : 4;
         const double dsr = sampleRate / decim;
-        const int N = (int) history.size() / decim;
+        const int H = (int) history.size();
+        std::vector<float> lin ((size_t) H);   // historia en orden, de la más antigua a la más reciente
+        for (int i = 0; i < H; ++i) lin[(size_t) i] = history[(size_t) ((histPos + i) % H)];
+
+        // Filtro paso bajo antes de diezmar: sin él, el desfase de medio sample entre el periodo real y el
+        // entero más cercano hace que en cuerdas brillantes gane el doble del periodo (error de octava).
+        dsp::Biquad lp1, lp2;
+        const double cutoff = std::min (1500.0, dsr * 0.3);
+        lp1.setLowpass (sampleRate, cutoff, 0.54);
+        lp2.setLowpass (sampleRate, cutoff, 1.31);
+        const int N = H / decim;
         std::vector<float> x ((size_t) N);
-        for (int i = 0; i < N; ++i)
+        for (int i = 0, j = 0; i < H; ++i)
         {
-            float acc = 0.0f;
-            for (int k = 0; k < decim; ++k) acc += history[(size_t) ((histPos + i * decim + k) % history.size())];
-            x[(size_t) i] = acc / (float) decim;
+            const float y = lp2.process (lp1.process (lin[(size_t) i]));
+            if (i % decim == decim - 1 && j < N) x[(size_t) j++] = y;
         }
 
         float energy = 0.0f;
@@ -67,18 +77,40 @@ public:
         int best = -1;
         const int tauMin = (int) (dsr / 1200.0);
         for (int tau = juce::jmax (2, tauMin); tau < tauMax; ++tau)
-            if (d[(size_t) tau] < 0.12f)
+            if (d[(size_t) tau] < 0.15f)
             {
                 while (tau + 1 < tauMax && d[(size_t) tau + 1] < d[(size_t) tau]) ++tau;
                 best = tau;
                 break;
             }
+        if (best < 0)
+        {
+            // Sin un mínimo claro bajo el umbral: el mínimo global, si es razonable
+            int m = juce::jmax (2, tauMin);
+            for (int tau = m; tau < tauMax; ++tau)
+                if (d[(size_t) tau] < d[(size_t) m]) m = tau;
+            if (d[(size_t) m] < 0.35f) best = m;
+        }
         if (best < 2) return last = r;
 
-        const float a = d[(size_t) best - 1], b = d[(size_t) best], c = d[(size_t) best + 1];
+        // Afinado fino a la frecuencia de muestreo original, alrededor del periodo encontrado
+        const int centre = best * decim;
+        const int lo = juce::jmax (2, centre - decim - 2), hi = centre + decim + 2;
+        const int Wf = H - hi - 2;
+        std::vector<float> df ((size_t) (hi + 2), 0.0f);
+        for (int t = lo - 1; t <= hi + 1; ++t)
+        {
+            float s = 0.0f;
+            for (int i = 0; i < Wf; ++i) { const float e = lin[(size_t) i] - lin[(size_t) (i + t)]; s += e * e; }
+            df[(size_t) t] = s;
+        }
+        int bt = lo;
+        for (int t = lo; t <= hi; ++t)
+            if (df[(size_t) t] < df[(size_t) bt]) bt = t;
+        const float a = df[(size_t) bt - 1], b = df[(size_t) bt], c = df[(size_t) bt + 1];
         const float den = a - 2.0f * b + c;
-        const float tau = (float) best + (std::abs (den) > 1.0e-6f ? 0.5f * (a - c) / den : 0.0f);
-        r.hz = (float) dsr / tau;
+        const float period = (float) bt + (std::abs (den) > 1.0e-12f ? 0.5f * (a - c) / den : 0.0f);
+        r.hz = (float) sampleRate / period;
         const float note = 69.0f + 12.0f * std::log2 (r.hz / 440.0f);
         r.midiNote = (int) std::round (note);
         r.cents = (note - (float) r.midiNote) * 100.0f;
@@ -93,6 +125,8 @@ public:
     }
 
     std::atomic<bool> enabled { false };
+    /** Silencia la salida mientras el afinador está abierto, como un pedal afinador. */
+    std::atomic<bool> muteOutput { true };
 
 private:
     void pushHistory (float v)

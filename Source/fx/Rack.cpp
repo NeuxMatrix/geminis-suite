@@ -69,9 +69,13 @@ void Rack::prepare (double sr, int maxBlock)
         auto m = info (t).create();
         m->prepare (sampleRate, maxBlockSize);
         if (t == cab) m->setUserIr (userIr);
+        std::vector<float> cl ((size_t) m->getLatency(), 0.0f), cr ((size_t) m->getLatency(), 0.0f);
         {
             const juce::SpinLock::ScopedLockType lock (slot.lock);
             std::swap (slot.module, m);
+            std::swap (slot.compL, cl);
+            std::swap (slot.compR, cr);
+            slot.compPos = 0;
             slot.type = t;
             slot.wet.setImmediate (slot.onParam->load() > 0.5f ? 1.0f : 0.0f);
         }
@@ -94,9 +98,13 @@ void Rack::syncModules()
         if (sampleRate > 0.0)
             m->prepare (sampleRate, maxBlockSize);
         if (t == cab) m->setUserIr (userIr);
+        std::vector<float> cl ((size_t) m->getLatency(), 0.0f), cr ((size_t) m->getLatency(), 0.0f);
         {
             const juce::SpinLock::ScopedLockType lock (slot.lock);
             std::swap (slot.module, m);
+            std::swap (slot.compL, cl);
+            std::swap (slot.compR, cr);
+            slot.compPos = 0;
             slot.type = t;
         }
         currentTypes[(size_t) i] = t;
@@ -138,12 +146,41 @@ void Rack::process (float* L, float* R, int n, Context& ctx)
 
         const bool on = slot.onParam->load() > 0.5f;
         slot.wet.setTarget (on ? 1.0f : 0.0f, (int) (ctx.sampleRate * 0.015));
-        if (! on && slot.wet.current <= 0.0f && slot.wet.left == 0)
+        const int lat = (int) slot.compL.size();
+        if (lat == 0 && ! on && slot.wet.current <= 0.0f && slot.wet.left == 0)
             continue;
 
         const auto& inf = info (slot.type);
         for (size_t p = 0; p < inf.params.size() && p < (size_t) paramsPerSlot; ++p)
             values[p] = inf.params[p].toReal (slot.p[p]->load());
+
+        if (lat > 0)
+        {
+            // Módulo con latencia: sigue funcionando apagado y el directo va retrasado lo mismo
+            const bool wasStereo = ctx.stereo;
+            for (int start = 0; start < n; start += (int) dryL.size())
+            {
+                const int m = juce::jmin (n - start, (int) dryL.size());
+                float* l = L + start;
+                float* r = R + start;
+                if (! wasStereo) std::copy (l, l + m, r);
+                std::copy (l, l + m, dryL.data());
+                std::copy (r, r + m, dryR.data());
+                ctx.stereo = wasStereo;
+                slot.module->process (l, r, m, values.data(), ctx);
+                for (int i = 0; i < m; ++i)
+                {
+                    const float dl = slot.compL[(size_t) slot.compPos], dr = slot.compR[(size_t) slot.compPos];
+                    slot.compL[(size_t) slot.compPos] = dryL[(size_t) i];
+                    slot.compR[(size_t) slot.compPos] = dryR[(size_t) i];
+                    slot.compPos = (slot.compPos + 1) % lat;
+                    const float g = slot.wet.next();
+                    l[i] = dl + (l[i] - dl) * g;
+                    r[i] = dr + (r[i] - dr) * g;
+                }
+            }
+            continue;
+        }
 
         if (slot.wet.left == 0 && slot.wet.current >= 1.0f)
         {

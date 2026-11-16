@@ -1,4 +1,5 @@
 #include "InstEditor.h"
+#include "../common/AppHooks.h"
 #include "../common/Splash.h"
 #include "../common/Widgets.h"
 
@@ -65,6 +66,7 @@ namespace
         if (has ("Tom") || has ("Conga") || has ("Bongo") || has ("Tumbadora") || has ("Cajón")) return colours::violet;
         if (has ("Platillo") || has ("Triángulo") || has ("Campana")) return colours::green;
         if (has ("Láser") || has ("Glitch") || has ("Metal") || has ("Yunque") || has ("freno")) return juce::Colour (0xffff9f5a);
+        if (has ("Nota pulsada") || has ("Acorde") || has ("Voz")) return juce::Colour (0xffb98cff);
         return colours::rose;
     }
 
@@ -1300,7 +1302,9 @@ public:
         sound.addSectionHeading (U ("Sintetizados"));
         for (int i = 0; i < numDrumModels; ++i) sound.addItem (names[i], i + 1);
         sound.addSectionHeading (U ("Acústicos (muestras libres CC0)"));
-        for (int i = numDrumModels; i < names.size(); ++i) sound.addItem (names[i], i + 1);
+        for (int i = numDrumModels; i < firstLateDrumSound(); ++i) sound.addItem (names[i], i + 1);
+        sound.addSectionHeading (U ("Melodía, acorde y voz (fila 4)"));
+        for (int i = firstLateDrumSound(); i < names.size(); ++i) sound.addItem (names[i], i + 1);
         sound.attach (s, padParamId (pad, "snd"), true);
         choke.attach (s, padParamId (pad, "choke"));
         setupKnob (tune, s, padParamId (pad, "tune"), U ("Afinación"), accent);
@@ -1815,7 +1819,11 @@ public:
         emblemSmall = draw::emblem().rescaled (88, 88, juce::Graphics::highResamplingQuality);
 
         homeButton.setTooltip (U ("Volver a la pantalla de inicio"));
-        homeButton.onClick = [this] { showSplash (true); };
+        homeButton.onClick = [this]
+        {
+            if (auto& goHome = geminis::homeHandler()) goHome();
+            else showSplash (true);
+        };
         presetButton.onClick = [this] { showPresetMenu(); };
         prevButton.onClick = [this] { stepPreset (-1); };
         nextButton.onClick = [this] { stepPreset (1); };

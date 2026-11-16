@@ -59,6 +59,10 @@ private:
         std::atomic<float>* onParam = nullptr;
         std::array<std::atomic<float>*, paramsPerSlot> p {};
         dsp::Ramp wet;
+        // Retardo del directo para módulos con latencia (la afinación): así, apagado o
+        // encendido, el sonido sale siempre con el mismo retraso que se comunica al DAW.
+        std::vector<float> compL, compR;
+        int compPos = 0;
     };
 
     struct RawSlot { float type, on; std::array<float, paramsPerSlot> p; };

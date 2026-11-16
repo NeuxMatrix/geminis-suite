@@ -20,8 +20,25 @@ namespace
         return idx;
     }
 
-    // Mapa General MIDI de cada pad del kit estándar
-    const int gmNotes[numPads] = { 36, 35, 38, 37, 39, 42, 44, 46, 41, 45, 48, 49, 51, 56, 54, 76 };
+    // Mapa General MIDI de cada pad. Las notas 84-86 (fila 4) quedan fuera de la batería General MIDI
+    // para que un archivo de batería no dispare la melodía, el acorde ni la voz.
+    const int gmNotes[numPads] = { 36, 38, 42, 46,   35, 37, 70, 39,   45, 48, 49, 51,   84, 85, 86, 29 };
+
+    // Identificadores internos de las voces: después de los modelos va la muestra y luego los sonidos nuevos
+    constexpr int vSample = numDrumModels;
+    constexpr int vPluck = numDrumModels + 1 + dlPluck;
+    constexpr int vChord = numDrumModels + 1 + dlChord;
+    constexpr int vVoice = numDrumModels + 1 + dlVoice;
+
+    // Nota de partida de los sonidos melódicos: do central (la afinación los transporta en semitonos)
+    constexpr float melodicRoot = 261.63f;
+
+    inline float polyBlep (float t, float dt) noexcept
+    {
+        if (t < dt)        { t /= dt; return t + t - t * t - 1.0f; }
+        if (t > 1.0f - dt) { t = (t - 1.0f) / dt; return t * t + t + t + 1.0f; }
+        return 0.0f;
+    }
 }
 
 const juce::StringArray& drumSoundNames()
@@ -34,17 +51,24 @@ const juce::StringArray& drumSoundNames()
                               U ("Maraca sintética"), U ("Láser"), U ("Bajo 808"), U ("Metal industrial"), U ("Ruido"), U ("Glitch") };
         for (int i : drumSampleIndices())
             n.add (drumSampleDisplayName (sampleManifest()[(size_t) i].resource));
+        n.addArray ({ U ("Nota pulsada"), U ("Acorde"), U ("Voz") });   // en el orden de DrumLateModel
+        jassert (n.size() == numDrumModels + (int) drumSampleIndices().size() + numLateDrumModels);
         return n;
     }();
     return names;
 }
 
+int numDrumSamples()      { return (int) drumSampleIndices().size(); }
+int firstLateDrumSound()  { return numDrumModels + numDrumSamples(); }
+
 int drumSoundIndex (const juce::String& name) { return drumSoundNames().indexOf (name); }
 
 const juce::StringArray& padRoleNames()
 {
-    static const juce::StringArray n { "Bombo", "Bombo 2", "Caja", "Caja 2", "Palmas", "Charles", "Pedal", "Abierto",
-                                       "Tom grave", "Tom medio", "Tom agudo", "Crash", "Ride", "Perc 1", "Perc 2", "FX" };
+    static const juce::StringArray n { "Bombo", "Caja", "Charles", "Abierto",
+                                       "Bombo 2", "Caja 2", "Shaker", "Perc",
+                                       "Tom grave", "Tom agudo", "Perc 2", "Perc 3",
+                                       U ("Melodía"), "Acorde", "Voz", "FX" };
     return n;
 }
 
@@ -61,13 +85,15 @@ int noteToPad (int note, int map)
         if (gmNotes[p] == note) return p;
     switch (note)
     {
-        case 40: return 2;  case 43: return 8;  case 47: return 9;  case 50: return 10;
-        case 49: case 52: case 55: case 57: return 11;
-        case 53: case 59: return 12;
-        case 69: case 70: case 82: return 6;
-        case 60: case 61: case 62: case 63: case 64: return 13;
-        case 75: case 77: return 14;
-        case 27: case 28: case 29: case 30: case 31: case 81: return 15;
+        case 40: return 1;                                   // caja eléctrica
+        case 44: return 2;                                   // charles de pedal
+        case 41: case 43: return 8;                          // toms graves
+        case 47: case 50: return 9;                          // toms agudos
+        case 52: case 55: case 57: return 10;                // otros platillos
+        case 53: case 59: case 56: case 75: case 76: case 77: return 11;   // campana, cencerro, claves, bloques
+        case 54: case 69: case 82: return 6;                 // pandereta, cabasa, shaker
+        case 60: case 61: case 62: case 63: case 64: case 80: case 81: return 7;   // bongós, congas, triángulo
+        case 27: case 28: case 30: case 31: return 15;       // efectos
         default: return -1;
     }
 }
@@ -112,7 +138,7 @@ struct DrumEngine::Voice
     double t = 0.0, endT = 1.0;
     float ph[6] {};
     juce::uint32 seed = 22222u;
-    dsp::Biquad f1, f2, toneLp, toneHp;
+    dsp::Biquad f1, f2, f3, toneLp, toneHp;
     bool useLp = false, useHp = false;
     dsp::OnePole sweep;
     float chokeGain = 1.0f, chokeStep = 0.0f;
@@ -129,7 +155,7 @@ struct DrumEngine::Voice
         t = 0.0;
         for (auto& p : ph) p = 0.0f;
         chokeGain = 1.0f; chokeStep = 0.0f;
-        f1.reset(); f2.reset(); toneLp.reset(); toneHp.reset(); sweep.reset();
+        f1.reset(); f2.reset(); f3.reset(); toneLp.reset(); toneHp.reset(); sweep.reset();
         hold = 0.0f; holdLeft = 0;
         const float tr = std::exp2 (tune / 12.0f);
         const float dm = 0.25f * std::pow (16.0f, decay);
@@ -154,6 +180,12 @@ struct DrumEngine::Voice
             case dmMetal:      tau = 0.45f * dm; f1.setBandpass (sr, 3000.0 * tr, 1.2); break;
             case dmNoise:      tau = 0.7f * dm; break;
             case dmGlitch:     tau = 0.12f * dm; break;
+            case vPluck:       tau = 0.45f * dm; break;
+            case vChord:       tau = 0.55f * dm; break;
+            case vVoice:       // formantes de una «a» abierta
+                tau = 0.7f * dm;
+                f1.setBandpass (sr, 800.0, 6.0); f2.setBandpass (sr, 1200.0, 8.0); f3.setBandpass (sr, 2800.0, 10.0);
+                break;
             default: break;
         }
         endT = (double) tau * 7.0 + 0.05;
@@ -191,6 +223,30 @@ struct DrumEngine::Voice
         ph[k] += hz / (float) sr;
         ph[k] -= std::floor (ph[k]);
         return std::sin (twoPi * ph[k]);
+    }
+
+    /** Suma de armónicos de una fase (1/k) en la que los agudos se apagan antes, como una cuerda
+        pulsada. Los senos de cada armónico salen por recurrencia, sin un seno por armónico. */
+    static float harmonics (float phase, int count, float decayPerHarmonic, float hz, double sr) noexcept
+    {
+        const float th = twoPi * phase;
+        const float c2 = 2.0f * std::cos (th);
+        float sPrev = 0.0f, s = std::sin (th), amp = 1.0f, sum = 0.0f;
+        for (int k = 1; k <= count && hz * (float) k < (float) sr * 0.45f; ++k)
+        {
+            sum += s * amp / (float) k;
+            const float next = c2 * s - sPrev;
+            sPrev = s; s = next;
+            amp *= decayPerHarmonic;
+        }
+        return sum;
+    }
+
+    inline float advance (int k, float hz, double sr) noexcept
+    {
+        ph[k] += hz / (float) sr;
+        ph[k] -= std::floor (ph[k]);
+        return ph[k];
     }
 
     float nextModel (double sr) noexcept
@@ -302,6 +358,43 @@ struct DrumEngine::Voice
             {
                 if (((int) t & 31) == 0) sweep.setCutoff (sr, 1000.0 + 11000.0 * std::exp (-T / (0.25f * dm)));
                 return sweep.lowpass (noise()) * std::exp (-T / (0.7f * dm)) * 1.3f;
+            }
+            case vPluck:
+            {
+                // Nota pulsada: dos osciladores un poco desafinados; GOLPE da más brillo al ataque
+                const float f = melodicRoot * tr;
+                const float fade = std::exp (-T * (8.0f + (1.0f - snap) * 30.0f));
+                const float a = harmonics (advance (0, f, sr), 10, fade, f, sr);
+                const float b = harmonics (advance (1, f * 1.003f, sr), 10, fade, f, sr);
+                const float att = std::min (1.0f, T / 0.002f);
+                return (a + b) * 0.5f * att * std::exp (-T / (0.45f * dm)) * 0.95f;
+            }
+            case vChord:
+            {
+                // Acorde menor con séptima (do, mi bemol, sol, si bemol), que encaja en casi cualquier estilo
+                static const float ratios[4] = { 1.0f, 1.189207f, 1.498307f, 1.781797f };
+                const float fade = std::exp (-T * (3.0f + (1.0f - snap) * 14.0f));
+                float x = 0.0f;
+                for (int k = 0; k < 4; ++k)
+                {
+                    const float f = melodicRoot * tr * ratios[k];
+                    x += harmonics (advance (k, f, sr), 6, fade, f, sr);
+                }
+                const float att = std::min (1.0f, T / 0.003f);
+                return x * 0.32f * att * std::exp (-T / (0.55f * dm));
+            }
+            case vVoice:
+            {
+                // Voz cantando «aa»: diente de sierra con vibrato que entra poco a poco, por tres formantes
+                const float vibAmount = juce::jlimit (0.0f, 1.0f, (T - 0.15f) / 0.25f);
+                const float f = melodicRoot * tr * (1.0f + 0.011f * vibAmount * std::sin (twoPi * 5.2f * T));
+                const float dt = f / (float) sr;
+                ph[0] += dt;
+                if (ph[0] >= 1.0f) ph[0] -= 1.0f;
+                const float src = 2.0f * ph[0] - 1.0f - polyBlep (ph[0], dt) + noise() * 0.04f;
+                const float y = f1.process (src) + f2.process (src) * 0.7f + f3.process (src) * 0.35f;
+                const float att = std::min (1.0f, T / 0.03f);
+                return y * att * std::exp (-T / (0.7f * dm)) * 2.8f;
             }
             case dmGlitch:
             default:
@@ -453,12 +546,16 @@ void DrumEngine::trigger (int pad, float velocity, int)
     v.tune = pp.tune->load(); v.decay = pp.decay->load(); v.tone = pp.tone->load(); v.snap = pp.snap->load();
     v.drive = pp.drive->load(); v.level = pp.level->load(); v.pan = pp.pan->load(); v.choke = choke;
     v.sample = nullptr;
-    if (sound >= numDrumModels)
+    if (sound >= firstLateDrumSound())
+    {
+        v.sound = vPluck + juce::jmin (numLateDrumModels - 1, sound - firstLateDrumSound());
+    }
+    else if (sound >= numDrumModels)
     {
         const int si = sound - numDrumModels;
         if (! samplesReady.load() || si >= (int) samples.size() || samples[(size_t) si] == nullptr) return;
         v.sample = samples[(size_t) si].get();
-        v.sound = numDrumModels;
+        v.sound = vSample;
     }
     v.seed = 0x9E3779B9u * (juce::uint32) (++counter);
     v.age = counter;

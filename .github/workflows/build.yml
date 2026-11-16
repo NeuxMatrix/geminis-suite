@@ -85,9 +85,9 @@ jobs:
           name: Geminis-${{ env.SISTEMA }}
           if-no-files-found: warn
           path: |
+            build/GeminisApp_artefacts/Release/Geminis.exe
+            build/GeminisApp_artefacts/Release/Geminis.app
             build/GeminisFX_artefacts/Release/VST3
             build/GeminisFX_artefacts/Release/AU
-            build/GeminisFX_artefacts/Release/Standalone
             build/GeminisInstrument_artefacts/Release/VST3
             build/GeminisInstrument_artefacts/Release/AU
-            build/GeminisInstrument_artefacts/Release/Standalone

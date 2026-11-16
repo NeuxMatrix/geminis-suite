@@ -1,4 +1,5 @@
 #include "FxEditor.h"
+#include "../common/AppHooks.h"
 
 using namespace geminis;
 using namespace geminis::fx;
@@ -243,36 +244,213 @@ void ModuleBrowser::mouseUp (const juce::MouseEvent& e)
 }
 
 //==============================================================================
-void TunerDisplay::paint (juce::Graphics& g)
+namespace
 {
-    auto r = getLocalBounds().toFloat();
-    g.setColour (juce::Colour (0xff111224));
-    g.fillRoundedRectangle (r, 8.0f);
-    g.setColour (colours::edge);
-    g.drawRoundedRectangle (r.reduced (0.5f), 8.0f, 1.0f);
+    struct GuitarString { const char* name; int midi; };
+    const GuitarString guitarStrings[] = { { "6 · Mi", 40 }, { "5 · La", 45 }, { "4 · Re", 50 },
+                                           { "3 · Sol", 55 }, { "2 · Si", 59 }, { "1 · Mi", 64 } };
+    constexpr int tunerHoldFrames = 18;      // 1,2 s a 15 lecturas por segundo
+    constexpr float inTuneCents = 3.0f;
+}
 
-    if (! reading.valid)
+TunerPanel::TunerPanel (GeminisFxProcessor& p) : processor (p)
+{
+    muteToggle.setButtonText (U ("Silenciar la salida mientras afinas"));
+    muteToggle.setToggleState (processor.tuner.muteOutput.load(), juce::dontSendNotification);
+    muteToggle.setColour (juce::ToggleButton::tickColourId, colours::green);
+    muteToggle.onClick = [this] { processor.tuner.muteOutput = muteToggle.getToggleState(); };
+    addAndMakeVisible (muteToggle);
+
+    closeButton.setButtonText (U ("Cerrar afinador"));
+    closeButton.onClick = [this] { if (onClose) onClose(); };
+    addAndMakeVisible (closeButton);
+}
+
+void TunerPanel::reset()
+{
+    hasReading = false; holdFrames = 0; silentFrames = 0; level = 0.0f; cents = 0.0f;
+    repaint();
+}
+
+void TunerPanel::update (const Tuner::Reading& r, float inputPeak)
+{
+    level = juce::jmax (level * 0.8f, inputPeak);
+    if (r.valid)
     {
-        g.setColour (colours::textFaint);
-        g.setFont (Fonts::ui (12.0f));
-        g.drawText (U ("Toca una cuerda"), r, juce::Justification::centred);
-        return;
+        if (! hasReading || r.midiNote != shown.midiNote) cents = r.cents;
+        else cents += 0.35f * (r.cents - cents);
+        shown = r;
+        hasReading = true;
+        holdFrames = tunerHoldFrames;
+    }
+    else if (holdFrames > 0) --holdFrames;
+    else hasReading = false;
+
+    silentFrames = level < 0.002f ? silentFrames + 1 : 0;
+    repaint();
+}
+
+void TunerPanel::resized()
+{
+    auto r = getLocalBounds().reduced (22, 18);
+    auto top = r.removeFromTop (34);
+    closeButton.setBounds (top.removeFromRight (150));
+    top.removeFromRight (14);
+    muteToggle.setBounds (top.removeFromRight (300));
+}
+
+void TunerPanel::paint (juce::Graphics& g)
+{
+    const auto acc = guitar ? colours::guitar : colours::voice;
+    auto area = getLocalBounds().toFloat();
+    g.setColour (colours::bg.withAlpha (0.94f));
+    g.fillRoundedRectangle (area, 14.0f);
+    draw::glassPanel (g, area.reduced (1.0f), acc, 0.35f, 14.0f);
+
+    auto r = area.reduced (22.0f, 18.0f);
+    auto top = r.removeFromTop (34.0f);
+    g.setColour (acc);
+    draw::spacedText (g, U ("AFINADOR"), Fonts::ui (13.0f, 700), top.removeFromLeft (160.0f), juce::Justification::centredLeft, 0.3f);
+    g.setColour (colours::textFaint);
+    g.setFont (Fonts::ui (12.0f));
+    g.drawText (U ("La = 440 Hz"), top.removeFromLeft (120.0f), juce::Justification::centredLeft);
+
+    const bool live = hasReading && holdFrames == tunerHoldFrames;
+    const float absCents = std::abs (cents);
+    const auto stateColour = ! hasReading ? colours::textFaint
+                           : absCents < inTuneCents ? colours::green
+                           : absCents < 15.0f ? colours::gold : colours::red;
+    const auto noteColour = live ? stateColour : stateColour.withAlpha (0.45f);
+
+    // Nota grande
+    auto noteArea = r.removeFromTop (r.getHeight() * 0.42f);
+    if (hasReading)
+    {
+        const auto name = Tuner::noteName (shown.midiNote);
+        const auto letters = name.trimCharactersAtEnd ("-0123456789"), octave = name.substring (letters.length());
+        auto big = Fonts::ui (juce::jmin (150.0f, noteArea.getHeight() * 0.9f), 700);
+        const float w = juce::GlyphArrangement::getStringWidth (big, letters);
+        auto line = noteArea.withSizeKeepingCentre (w + 60.0f, noteArea.getHeight());
+        const auto c = noteArea.getCentre();
+        juce::ColourGradient glow (noteColour.withAlpha (live ? 0.22f : 0.1f), c.x, c.y,
+                                   noteColour.withAlpha (0.0f), c.x + noteArea.getHeight() * 0.85f, c.y, true);
+        g.setGradientFill (glow);
+        g.fillEllipse (noteArea.withSizeKeepingCentre (noteArea.getHeight() * 1.7f, noteArea.getHeight() * 1.1f));
+        g.setColour (noteColour);
+        g.setFont (big);
+        g.drawText (letters, line.removeFromLeft (w + 4.0f), juce::Justification::centred);
+        g.setFont (Fonts::ui (big.getHeight() * 0.3f, 600));
+        g.drawText (octave, line.withTrimmedTop (big.getHeight() * 0.45f), juce::Justification::centredLeft);
+    }
+    else
+    {
+        g.setColour (colours::textDim);
+        g.setFont (Fonts::ui (30.0f, 600));
+        g.drawText (guitar ? U ("Toca una cuerda al aire") : U ("Canta una nota larga"), noteArea, juce::Justification::centred);
     }
 
-    const bool inTune = std::abs (reading.cents) < 4.0f;
-    const auto col = inTune ? colours::green : std::abs (reading.cents) < 15.0f ? colours::gold : colours::red;
-    g.setColour (col);
-    g.setFont (Fonts::ui (18.0f, 700));
-    g.drawText (Tuner::noteName (reading.midiNote), r.removeFromLeft (64.0f), juce::Justification::centred);
+    // Escala de cents con la aguja
+    auto meter = r.removeFromTop (110.0f).reduced (juce::jmax (0.0f, (r.getWidth() - 760.0f) * 0.5f), 0.0f);
+    auto scale = meter.removeFromTop (70.0f);
+    const float cx = scale.getCentreX(), half = scale.getWidth() * 0.5f;
+    auto xFor = [cx, half] (float c) { return cx + juce::jlimit (-50.0f, 50.0f, c) / 50.0f * half; };
+    g.setColour (colours::green.withAlpha (0.16f));
+    g.fillRoundedRectangle (juce::Rectangle<float> (xFor (-inTuneCents), scale.getY(), xFor (inTuneCents) - xFor (-inTuneCents), scale.getHeight()), 4.0f);
+    for (int c = -50; c <= 50; c += 5)
+    {
+        const bool major = c % 25 == 0, mid = c % 10 == 0;
+        const float h = major ? 34.0f : mid ? 22.0f : 12.0f;
+        g.setColour (c == 0 ? colours::green : colours::edge.brighter (major ? 0.6f : 0.2f));
+        g.fillRect (juce::Rectangle<float> (xFor ((float) c) - (c == 0 ? 1.5f : 0.75f), scale.getCentreY() - h * 0.5f, c == 0 ? 3.0f : 1.5f, h));
+    }
+    g.setFont (Fonts::ui (12.0f, 600));
+    g.setColour (colours::textFaint);
+    for (int c : { -50, -25, 25, 50 })
+        g.drawText ((c > 0 ? "+" : "") + juce::String (c), juce::Rectangle<float> (xFor ((float) c) - 30.0f, scale.getBottom() - 12.0f, 60.0f, 16.0f),
+                    juce::Justification::centred);
+    g.setFont (Fonts::ui (22.0f, 700));
+    g.drawText (U ("♭"), juce::Rectangle<float> (scale.getX() - 44.0f, scale.getY(), 30.0f, scale.getHeight()), juce::Justification::centred);
+    g.drawText (U ("♯"), juce::Rectangle<float> (scale.getRight() + 14.0f, scale.getY(), 30.0f, scale.getHeight()), juce::Justification::centred);
+    if (hasReading)
+    {
+        const float x = xFor (cents);
+        g.setColour (noteColour.withAlpha (0.25f));
+        g.fillRoundedRectangle (juce::Rectangle<float> (x - 9.0f, scale.getY() - 4.0f, 18.0f, scale.getHeight() + 8.0f), 9.0f);
+        g.setColour (noteColour);
+        g.fillRoundedRectangle (juce::Rectangle<float> (x - 3.5f, scale.getY() - 2.0f, 7.0f, scale.getHeight() + 4.0f), 3.5f);
+    }
 
-    auto meter = r.reduced (8.0f, 0.0f);
-    const float cx = meter.getCentreX();
-    g.setColour (colours::edge);
-    g.drawLine (meter.getX(), meter.getCentreY(), meter.getRight(), meter.getCentreY(), 1.0f);
-    g.drawLine (cx, meter.getY() + 8.0f, cx, meter.getBottom() - 8.0f, 1.0f);
-    const float x = cx + juce::jlimit (-50.0f, 50.0f, reading.cents) / 50.0f * meter.getWidth() * 0.5f;
-    g.setColour (col);
-    g.fillRoundedRectangle (x - 3.0f, meter.getY() + 7.0f, 6.0f, meter.getHeight() - 14.0f, 3.0f);
+    // Qué hacer
+    auto status = meter.removeFromTop (36.0f);
+    if (hasReading)
+    {
+        juce::String advice;
+        if (absCents < inTuneCents) advice = U ("Afinada");
+        else if (cents < 0.0f)      advice = guitar ? U ("Baja: aprieta la clavija") : U ("Baja: sube un poco");
+        else                        advice = guitar ? U ("Alta: afloja la clavija") : U ("Alta: baja un poco");
+        g.setColour (stateColour);
+        g.setFont (Fonts::ui (18.0f, 700));
+        g.drawText (advice, status.removeFromTop (22.0f), juce::Justification::centred);
+        g.setColour (colours::textDim);
+        g.setFont (Fonts::ui (13.0f));
+        g.drawText ((cents >= 0.0f ? "+" : "") + juce::String (cents, 1) + " cents  ·  " + juce::String (shown.hz, 1) + " Hz",
+                    status, juce::Justification::centred);
+    }
+
+    // Cuerdas de la guitarra con afinación estándar
+    r.removeFromTop (14.0f);
+    if (guitar)
+    {
+        auto row = r.removeFromTop (64.0f);
+        const float chipW = juce::jmin (130.0f, (row.getWidth() - 50.0f) / 6.0f);
+        auto chips = row.withSizeKeepingCentre (chipW * 6.0f + 50.0f, row.getHeight());
+        int nearest = -1;
+        if (hasReading)
+        {
+            const float note = 69.0f + 12.0f * std::log2 (shown.hz / 440.0f);
+            float bestD = 2.6f;
+            for (int i = 0; i < 6; ++i)
+                if (std::abs (note - (float) guitarStrings[i].midi) < bestD) { bestD = std::abs (note - (float) guitarStrings[i].midi); nearest = i; }
+        }
+        for (int i = 0; i < 6; ++i)
+        {
+            auto c = chips.removeFromLeft (chipW);
+            chips.removeFromLeft (10.0f);
+            const bool on = i == nearest;
+            g.setColour (on ? stateColour.withAlpha (0.18f) : colours::panel);
+            g.fillRoundedRectangle (c, 10.0f);
+            g.setColour (on ? stateColour : colours::edge);
+            g.drawRoundedRectangle (c.reduced (0.5f), 10.0f, on ? 2.0f : 1.0f);
+            g.setColour (on ? colours::text : colours::textDim);
+            g.setFont (Fonts::ui (17.0f, 700));
+            g.drawText (U (guitarStrings[i].name), c.removeFromTop (c.getHeight() * 0.6f), juce::Justification::centredBottom);
+            g.setColour (colours::textFaint);
+            g.setFont (Fonts::ui (12.0f));
+            const float hz = 440.0f * std::pow (2.0f, (float) (guitarStrings[i].midi - 69) / 12.0f);
+            g.drawText (juce::String (hz, 1) + " Hz", c, juce::Justification::centred);
+        }
+    }
+
+    // Nivel de entrada y ayuda si no llega sonido
+    auto bottom = getLocalBounds().toFloat().reduced (22.0f, 18.0f).removeFromBottom (44.0f);
+    auto levelRow = bottom.removeFromTop (16.0f).withSizeKeepingCentre (juce::jmin (520.0f, bottom.getWidth()), 16.0f);
+    g.setColour (colours::textFaint);
+    g.setFont (Fonts::ui (11.0f, 700));
+    g.drawText (U ("ENTRADA"), levelRow.removeFromLeft (70.0f), juce::Justification::centredLeft);
+    auto bar = levelRow.withSizeKeepingCentre (levelRow.getWidth(), 6.0f);
+    g.setColour (juce::Colour (0xff1e2036));
+    g.fillRoundedRectangle (bar, 3.0f);
+    const float lv = juce::jlimit (0.0f, 1.0f, (juce::Decibels::gainToDecibels (level, -60.0f) + 60.0f) / 60.0f);
+    g.setColour (colours::green);
+    g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * lv), 3.0f);
+    if (silentFrames > 45)
+    {
+        g.setColour (colours::gold);
+        g.setFont (Fonts::ui (13.0f));
+        g.drawFittedText (U ("No llega sonido. Si arriba pone que la entrada está silenciada, pulsa «Activar entrada», "
+                             "y comprueba en «Ajustes de audio» la tarjeta y la entrada elegidas."),
+                          bottom.toNearestInt(), juce::Justification::centred, 2);
+    }
 }
 } // namespace geminis::fx
 
@@ -290,21 +468,21 @@ GeminisFxEditor::GeminisFxEditor (GeminisFxProcessor& p)
     emblemSmall = draw::emblem().rescaled (88, 88, juce::Graphics::highResamplingQuality);
 
     homeButton.setTooltip (U ("Volver a la pantalla de inicio"));
-    homeButton.onClick = [this] { showSplash (true); };
+    homeButton.onClick = [this]
+    {
+        if (auto& goHome = geminis::homeHandler()) goHome();
+        else showSplash (true);
+    };
     presetButton.setTooltip (U ("Presets de fábrica y tuyos"));
     presetButton.onClick = [this] { showPresetMenu(); };
     prevButton.onClick = [this] { stepPreset (-1); };
     nextButton.onClick = [this] { stepPreset (1); };
     tunerButton.setClickingTogglesState (true);
-    tunerButton.onClick = [this]
-    {
-        processor.tuner.enabled = tunerButton.getToggleState();
-        tunerDisplay.setVisible (tunerButton.getToggleState());
-        resized();
-    };
+    tunerButton.setTooltip (U ("Afinador a pantalla completa. La salida se silencia mientras afinas."));
+    tunerButton.onClick = [this] { showTuner (tunerButton.getToggleState()); };
+    tunerPanel.onClose = [this] { showTuner (false); };
     for (auto* b : { &homeButton, &presetButton, &prevButton, &nextButton, &tunerButton })
         addAndMakeVisible (b);
-    addChildComponent (tunerDisplay);
 
     inputBox.addItemList ({ "Mono izquierda", "Mono derecha", "Mono suma", U ("Estéreo") }, 1);
     inputBox.setTooltip (U ("Qué entrada usar: guitarra en la entrada 1, 2, ambas, o pista estéreo"));
@@ -333,6 +511,7 @@ GeminisFxEditor::GeminisFxEditor (GeminisFxProcessor& p)
     emptyHint.setColour (juce::Label::textColourId, colours::textFaint);
     emptyHint.setFont (Fonts::ui (14.0f));
     rackContent.addAndMakeVisible (emptyHint);
+    addChildComponent (tunerPanel);
 
     splash.onChoose = [this] (int index)
     {
@@ -374,8 +553,20 @@ juce::Colour GeminisFxEditor::accent() const
     return processor.getMode() == Mode::voice ? colours::voice : colours::guitar;
 }
 
+void GeminisFxEditor::showTuner (bool show)
+{
+    tunerButton.setToggleState (show, juce::dontSendNotification);
+    processor.tuner.enabled = show;
+    tunerPanel.setGuitar (processor.getMode() != Mode::voice);
+    tunerPanel.reset();
+    tunerPanel.setVisible (show);
+    if (show) tunerPanel.toFront (false);
+    tunerCounter = 0;
+}
+
 void GeminisFxEditor::showSplash (bool show)
 {
+    if (show) showTuner (false);
     splash.setVisible (show);
     if (show) splash.toFront (false);
 }
@@ -506,12 +697,18 @@ void GeminisFxEditor::stepPreset (int delta)
 
 void GeminisFxEditor::timerCallback()
 {
-    inMeter.push (processor.inputPeak.exchange (0.0f));
+    const float inPeak = processor.inputPeak.exchange (0.0f);
+    inMeter.push (inPeak);
     outMeter.push (processor.outputPeak.exchange (0.0f));
-    if (tunerDisplay.isVisible() && ++tunerCounter >= 3)
+    if (tunerPanel.isVisible())
     {
-        tunerCounter = 0;
-        tunerDisplay.setReading (processor.tuner.analyse());
+        tunerPeak = juce::jmax (tunerPeak, inPeak);
+        if (++tunerCounter >= 2)
+        {
+            tunerCounter = 0;
+            tunerPanel.update (processor.tuner.analyse(), tunerPeak);
+            tunerPeak = 0.0f;
+        }
     }
 }
 
@@ -578,9 +775,7 @@ void GeminisFxEditor::resized()
     inputBox.setBounds (bar.removeFromRight (140));
     bar.removeFromRight (8);
     tunerButton.setBounds (bar.removeFromLeft (84));
-    bar.removeFromLeft (8);
-    if (tunerDisplay.isVisible())
-        tunerDisplay.setBounds (bar.removeFromLeft (juce::jmin (220, bar.getWidth())));
+    tunerPanel.setBounds (getLocalBounds().withTrimmedTop (84).reduced (14, 0).withTrimmedBottom (14));
 
     auto body = getLocalBounds().withTrimmedTop (100).reduced (14, 0).withTrimmedBottom (14);
     browserView.setBounds (body.removeFromLeft (212).reduced (4, 4));

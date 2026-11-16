@@ -1,5 +1,9 @@
 #include "Splash.h"
 
+#ifndef GEMINIS_VERSION
+ #define GEMINIS_VERSION "0.0.0"
+#endif
+
 namespace geminis
 {
 //==============================================================================
@@ -150,10 +154,10 @@ void icon (juce::Graphics& g, Icon type, juce::Rectangle<float> area, juce::Colo
 } // namespace draw
 
 //==============================================================================
-Splash::Splash (const juce::String& sub, std::array<Card, 3> c)
-    : subtitle (sub), cards (std::move (c))
+Splash::Splash (const juce::String& sub, std::vector<Card> c)
+    : subtitle (sub), cards (std::move (c)), hover (cards.size(), 0.0f)
 {
-    footer = U ("Geminis Audio · v0.2");
+    footer = U ("Geminis Audio · v") + GEMINIS_VERSION;
     for (int i = 0; i < 260; ++i)
     {
         const float layer = (float) (i % 3);
@@ -186,7 +190,7 @@ void Splash::timerCallback()
 {
     t = juce::Time::getMillisecondCounterHiRes() * 0.001 - startTime;
 
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < (int) cards.size(); ++i)
     {
         const float target = hovered == i ? 1.0f : 0.0f;
         hover[(size_t) i] += (target - hover[(size_t) i]) * 0.18f;
@@ -202,8 +206,10 @@ void Splash::timerCallback()
 
 juce::Rectangle<float> Splash::cardBounds (int index) const
 {
-    const float w = juce::jmin (300.0f, ((float) getWidth() - 120.0f) / 3.0f), h = 210.0f, gap = 26.0f;
-    const float total = 3.0f * w + 2.0f * gap;
+    const float n = (float) cards.size();
+    const float gap = cards.size() > 3 ? 18.0f : 26.0f, h = 210.0f;
+    const float w = juce::jmin (300.0f, ((float) getWidth() - 120.0f - (n - 1.0f) * gap) / n);
+    const float total = n * w + (n - 1.0f) * gap;
     const float y = (float) getHeight() - h - 64.0f - 10.0f * hover[(size_t) index];
     return { ((float) getWidth() - total) * 0.5f + (float) index * (w + gap), y, w, h };
 }
@@ -332,7 +338,8 @@ void Splash::paintCard (juce::Graphics& g, int index)
     g.setGradientFill (sheen);
     g.fillRoundedRectangle (r.withHeight (60.0f).reduced (1.0f), 15.0f);
 
-    auto inner = r.reduced (22.0f, 20.0f);
+    const bool compact = cards.size() > 3;
+    auto inner = r.reduced (compact ? 18.0f : 22.0f, 20.0f);
     auto iconArea = inner.removeFromTop (58.0f).removeFromLeft (58.0f);
     juce::ColourGradient disc (card.colour.withAlpha (0.28f + 0.2f * h), iconArea.getCentreX(), iconArea.getY(),
                                card.colour.withAlpha (0.05f), iconArea.getCentreX(), iconArea.getBottom(), false);
@@ -344,13 +351,13 @@ void Splash::paintCard (juce::Graphics& g, int index)
 
     inner.removeFromTop (14.0f);
     g.setColour (colours::text);
-    g.setFont (Fonts::ui (23.0f, 700));
-    g.drawText (card.title, inner.removeFromTop (30.0f), juce::Justification::centredLeft);
+    g.setFont (Fonts::ui (compact ? 21.0f : 23.0f, 700));
+    g.drawFittedText (card.title, inner.removeFromTop (30.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.8f);
     inner.removeFromTop (4.0f);
     g.setColour (colours::textDim);
-    g.setFont (Fonts::ui (13.5f));
-    g.drawText (card.line1, inner.removeFromTop (19.0f), juce::Justification::centredLeft);
-    g.drawText (card.line2, inner.removeFromTop (19.0f), juce::Justification::centredLeft);
+    g.setFont (Fonts::ui (compact ? 13.0f : 13.5f));
+    g.drawFittedText (card.line1, inner.removeFromTop (19.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.85f);
+    g.drawFittedText (card.line2, inner.removeFromTop (19.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.85f);
 
     auto actionRow = inner.removeFromBottom (22.0f);
     g.setColour (card.colour.withAlpha (0.75f + 0.25f * h));
@@ -384,7 +391,7 @@ void Splash::paint (juce::Graphics& g)
     draw::spacedText (g, upper (subtitle), Fonts::ui (14.0f, 600), { 0.0f, wordY + 64.0f, b.getWidth(), 22.0f },
                       juce::Justification::centred, 0.28f);
 
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < (int) cards.size(); ++i)
         paintCard (g, i);
 
     g.setColour (colours::textFaint);
@@ -426,7 +433,7 @@ void Splash::mouseMove (const juce::MouseEvent& e)
 {
     int now = -1;
     if (! messageVisible)
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < (int) cards.size(); ++i)
             if (cardBounds (i).expanded (0.0f, 12.0f).contains (e.position))
                 now = i;
     hovered = now;
@@ -445,7 +452,7 @@ void Splash::mouseUp (const juce::MouseEvent& e)
         return;
     }
 
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < (int) cards.size(); ++i)
         if (cardBounds (i).expanded (0.0f, 12.0f).contains (e.position) && onChoose)
         {
             onChoose (i);

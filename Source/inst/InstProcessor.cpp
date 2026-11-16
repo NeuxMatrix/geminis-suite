@@ -428,4 +428,6 @@ void GeminisInstrumentProcessor::setStateInformation (const void* data, int size
 
 juce::AudioProcessorEditor* GeminisInstrumentProcessor::createEditor() { return new GeminisInstrumentEditor (*this); }
 
+#if ! GEMINIS_PROGRAMA  // el programa Géminis crea los dos procesadores por su cuenta
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new GeminisInstrumentProcessor(); }
+#endif

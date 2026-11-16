@@ -52,13 +52,28 @@ private:
     int rowAt (int y) const;
 };
 
-class TunerDisplay : public juce::Component
+/** Afinador a pantalla grande: nota, aguja de cents, cuerda más cercana y nivel de entrada. */
+class TunerPanel : public juce::Component
 {
 public:
-    void setReading (const Tuner::Reading& r) { reading = r; repaint(); }
+    explicit TunerPanel (GeminisFxProcessor&);
+    void setGuitar (bool g) { guitar = g; repaint(); }
+    /** Se llama unas 15 veces por segundo con la última lectura y el pico de entrada. */
+    void update (const Tuner::Reading&, float inputPeak);
+    void reset();
     void paint (juce::Graphics&) override;
+    void resized() override;
+
+    std::function<void()> onClose;
+
 private:
-    Tuner::Reading reading;
+    GeminisFxProcessor& processor;
+    juce::ToggleButton muteToggle;
+    juce::TextButton closeButton;
+    bool guitar = true, hasReading = false;
+    Tuner::Reading shown;
+    float cents = 0.0f, level = 0.0f;
+    int holdFrames = 0, silentFrames = 0;
 };
 } // namespace geminis::fx
 
@@ -80,6 +95,7 @@ private:
     void showPresetMenu();
     void stepPreset (int delta);
     void updatePresetLabel();
+    void showTuner (bool);
     juce::Colour accent() const;
 
     GeminisFxProcessor& processor;
@@ -92,7 +108,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> inputAttachment;
     geminis::ParamKnob inKnob, outKnob;
     geminis::LevelMeter inMeter { "IN" }, outMeter { "OUT" };
-    geminis::fx::TunerDisplay tunerDisplay;
+    geminis::fx::TunerPanel tunerPanel { processor };
 
     juce::Viewport browserView, rackView;
     std::unique_ptr<geminis::fx::ModuleBrowser> browser;
@@ -103,6 +119,7 @@ private:
     geminis::Splash splash;
     std::unique_ptr<juce::FileChooser> fileChooser;
     int tunerCounter = 0;
+    float tunerPeak = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GeminisFxEditor)
 };
