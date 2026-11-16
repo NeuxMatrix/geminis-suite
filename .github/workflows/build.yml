@@ -1,21 +1,38 @@
 name: Compilar Geminis
 
+# Ahorro de minutos (16/11/2026): en GitHub, 1 minuto de Windows cuenta como 2
+# y 1 de macOS como 10. Por eso:
+# - Windows se compila en cada subida (menos si solo cambian textos .md).
+# - macOS solo en main o al lanzarlo a mano con «Incluir macOS».
+# - Si subes otra vez a la misma rama, se cancela la compilación anterior.
 on:
   push:
     branches: ['**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
+    inputs:
+      macos:
+        description: 'Incluir macOS (cada minuto cuenta como 10)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: compilar-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            name: Windows
-          - os: macos-latest
-            name: macOS
+        os: ${{ (github.ref == 'refs/heads/main' || inputs.macos) && fromJSON('["windows-latest","macos-latest"]') || fromJSON('["windows-latest"]') }}
+    name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      SISTEMA: ${{ startsWith(matrix.os, 'windows') && 'Windows' || 'macOS' }}
     defaults:
       run:
         shell: bash
@@ -63,7 +80,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: Geminis-${{ matrix.name }}
+          name: Geminis-${{ env.SISTEMA }}
           if-no-files-found: warn
           path: |
             build/GeminisFX_artefacts/Release/VST3
