@@ -91,7 +91,7 @@ Pattern Pattern::fromString (const juce::String& s)
     rows.addTokens (s, "|", {});
     for (int p = 0; p < juce::jmin (numPads, rows.size()); ++p)
         for (int k = 0; k < juce::jmin (numSteps, rows[p].length()); ++k)
-            pt.steps[(size_t) p][(size_t) k] = (juce::uint8) juce::jlimit (0, 3, rows[p][k] - '0');
+            pt.steps[(size_t) p][(size_t) k] = (juce::uint8) juce::jlimit (0, 3, (int) rows[p][k] - (int) '0');
     return pt;
 }
 
