@@ -1,4 +1,5 @@
 #include "FxEditor.h"
+#include "../common/AppHooks.h"
 
 using namespace geminis;
 using namespace geminis::fx;
@@ -290,7 +291,11 @@ GeminisFxEditor::GeminisFxEditor (GeminisFxProcessor& p)
     emblemSmall = draw::emblem().rescaled (88, 88, juce::Graphics::highResamplingQuality);
 
     homeButton.setTooltip (U ("Volver a la pantalla de inicio"));
-    homeButton.onClick = [this] { showSplash (true); };
+    homeButton.onClick = [this]
+    {
+        if (auto& goHome = geminis::homeHandler()) goHome();
+        else showSplash (true);
+    };
     presetButton.setTooltip (U ("Presets de fábrica y tuyos"));
     presetButton.onClick = [this] { showPresetMenu(); };
     prevButton.onClick = [this] { stepPreset (-1); };

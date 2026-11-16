@@ -1,4 +1,5 @@
 #include "InstEditor.h"
+#include "../common/AppHooks.h"
 #include "../common/Splash.h"
 #include "../common/Widgets.h"
 
@@ -1815,7 +1816,11 @@ public:
         emblemSmall = draw::emblem().rescaled (88, 88, juce::Graphics::highResamplingQuality);
 
         homeButton.setTooltip (U ("Volver a la pantalla de inicio"));
-        homeButton.onClick = [this] { showSplash (true); };
+        homeButton.onClick = [this]
+        {
+            if (auto& goHome = geminis::homeHandler()) goHome();
+            else showSplash (true);
+        };
         presetButton.onClick = [this] { showPresetMenu(); };
         prevButton.onClick = [this] { stepPreset (-1); };
         nextButton.onClick = [this] { stepPreset (1); };

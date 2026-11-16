@@ -1,10 +1,12 @@
 # Géminis Suite
 
-Suite de audio propia, con diseño y sonidos originales. Son dos plugins (VST3 en Windows, macOS y Linux,
-y AU en macOS) que también funcionan como programa independiente. Valen para cualquier DAW: Cubase, Logic,
-Ableton, Reaper, FL Studio o Maschine.
+Suite de audio propia, con diseño y sonidos originales. Tiene dos partes:
 
-Al abrirlos, una pantalla de inicio animada con el emblema de Géminis pregunta qué vas a hacer.
+- **Géminis**, el programa. Al abrirlo, una pantalla de inicio animada con el emblema de Géminis pregunta
+  qué vas a hacer: Guitarra, Voz, Sintetizador, Batería o Instrumentos. Lo que elijas se abre en la misma
+  ventana, y el botón Inicio vuelve a esa pantalla para cambiar de modo.
+- **Dos plugins** para cualquier DAW (VST3 en Windows, macOS y Linux, y AU en macOS): Cubase, Logic,
+  Ableton, Reaper, FL Studio o Maschine. Son dos porque los DAW separan los efectos de los instrumentos.
 
 | Plugin | Dónde se pone | Modos |
 |---|---|---|
@@ -65,23 +67,24 @@ GitHub compila Windows y macOS en cada cambio. En la pestaña **Actions** del re
 ejecución y baja hasta las descargas.
 
 - **Windows:** descarga `Geminis-Instalador-Windows`, descomprímelo y abre `Geminis-Suite-…-Instalador.exe`.
-  Instala los dos programas con accesos en el menú Inicio, copia los plugins a
+  Instala el programa Géminis con su acceso en el menú Inicio (y en el escritorio), copia los plugins a
   `C:\Program Files\Common Files\VST3\` y aparece en «Aplicaciones instaladas» para desinstalarlo.
   Como el instalador no está firmado, Windows puede avisar con «Windows protegió su PC»: pulsa
   «Más información» y luego «Ejecutar de todas formas».
 - **Sin instalador:** `Geminis-Windows` trae los mismos archivos sueltos. Copia las carpetas `.vst3` a
-  `C:\Program Files\Common Files\VST3\`; los `.exe` funcionan desde cualquier carpeta.
+  `C:\Program Files\Common Files\VST3\`; `Geminis.exe` funciona desde cualquier carpeta.
 - **macOS:** `Geminis-macOS`.
 
 Después, vuelve a buscar plugins en tu DAW. En Maschine: Preferencias > Plug-ins > Rescan.
 
-### Programa independiente
+### El programa Géminis
 
-- Los ajustes de audio están en el botón **Options** de arriba, en «Audio/MIDI Settings...».
-- Geminis FX empieza con la entrada silenciada para que no se acople. Para oír la guitarra o el
-  micro, apaga «Feedback Loop: Mute audio input». Usa auriculares si tocas con el micro y los
-  altavoces del portátil, porque se acoplan enseguida. El programa recuerda lo que elijas.
-- Los dos programas piden 44100 Hz. Con «Windows Audio» la frecuencia la marca Windows, así que
+- Los ajustes de audio están en el botón **Ajustes de audio**, arriba a la izquierda: tarjeta de sonido,
+  frecuencia, búfer y entradas MIDI. Los controladores MIDI, como Maschine, se activan solos al conectarlos.
+- La entrada de audio empieza silenciada para que no se acople. En Guitarra y Voz aparece un aviso con el
+  botón «Activar entrada». Usa auriculares si tocas con el micro y los altavoces del portátil, porque se
+  acoplan enseguida. El programa recuerda lo que elijas y también tus sonidos de cada modo.
+- Pide 44100 Hz. Con «Windows Audio» la frecuencia la marca Windows, así que
   puede que solo aparezca 48000 Hz. Para usar 44100 Hz, elige «Windows Audio (Exclusive Mode)»
   o cambia el formato del dispositivo en Windows: Panel de control de sonido > el dispositivo >
   Propiedades > Opciones avanzadas.
@@ -96,7 +99,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ```
 
-Los plugins quedan en `build/GeminisFX_artefacts/Release/` y `build/GeminisInstrument_artefacts/Release/`.
+Los plugins quedan en `build/GeminisFX_artefacts/Release/` y `build/GeminisInstrument_artefacts/Release/`,
+y el programa en `build/GeminisApp_artefacts/Release/`.
 
 ## Pruebas de audio
 
@@ -116,6 +120,8 @@ cmake --build build --target GeminisDspTest GeminisInstTest
 - `Source/fx/`: Geminis FX (módulos, rack, presets, procesador e interfaz).
 - `Source/inst/`: Geminis Instrument (sintetizador y tablas de onda, batería y kits, instrumentos con muestras,
   presets, efectos, procesador e interfaz).
+- `Source/app/`: el programa Géminis, que reúne los dos plugins tras la pantalla de inicio común.
+- `installer/`: instalador de Windows (Inno Setup).
 - `Assets/`: logotipo, tipografías libres y muestras CC0 (ver `Assets/samples/LICENCIAS.md`).
 - `tools/make_samples.py`: prepara las muestras a partir de las librerías originales.
 - `tests/`: pruebas de audio sin interfaz.

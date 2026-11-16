@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(GeminisSuite VERSION 0.3.0 LANGUAGES C CXX)
+project(GeminisSuite VERSION 0.4.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,7 +22,8 @@ else()
   FetchContent_MakeAvailable(JUCE)
 endif()
 
-set(GEMINIS_FORMATS VST3 Standalone)
+# El programa independiente es Géminis (GeminisApp, más abajo), que reúne los dos plugins.
+set(GEMINIS_FORMATS VST3)
 if(APPLE)
   list(APPEND GEMINIS_FORMATS AU)
 endif()
@@ -49,7 +50,8 @@ set(GEMINIS_DEFINES
   JUCE_USE_CURL=0
   JUCE_VST3_CAN_REPLACE_VST2=0
   JUCE_REPORT_APP_USAGE=0
-  JUCE_DISPLAY_SPLASH_SCREEN=0)
+  JUCE_DISPLAY_SPLASH_SCREEN=0
+  GEMINIS_VERSION="${PROJECT_VERSION}")
 
 function(geminis_configure target)
   target_include_directories(${target} PRIVATE Source)
@@ -57,9 +59,6 @@ function(geminis_configure target)
     target_compile_options(${target} PRIVATE /utf-8 /bigobj)
   endif()
   target_compile_definitions(${target} PUBLIC ${GEMINIS_DEFINES})
-  # Aplicación independiente propia (pide 44100 Hz por defecto).
-  target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/Source/common/StandaloneApp.cpp)
-  target_compile_definitions(${target} PUBLIC JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
   target_link_libraries(${target}
     PRIVATE
       GeminisAssets
@@ -110,6 +109,48 @@ option(GEMINIS_BUILD_TESTS "Compila las pruebas de audio sin interfaz" OFF)
 # Geminis Instrument: sintetizador, batería e instrumentos (MIDI)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Source/inst/InstProcessor.cpp)
   include(Source/inst/Instrument.cmake)
+
+  #============================================================================
+  # Géminis: el programa independiente. Al abrirlo muestra la pantalla de inicio
+  # con los cinco modos y abre Geminis FX o Geminis Instrument en la misma ventana.
+  juce_add_gui_app(GeminisApp
+    PRODUCT_NAME "Geminis"
+    COMPANY_NAME "Geminis Audio"
+    BUNDLE_ID "com.geminisaudio.geminis"
+    VERSION ${PROJECT_VERSION}
+    ICON_BIG Assets/logo/icono-512.png
+    ICON_SMALL Assets/logo/icono-256.png
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "Geminis necesita la entrada de audio para procesar tu guitarra o tu voz.")
+
+  set(GEMINIS_APP_SOURCES
+    Source/app/GeminisApp.cpp
+    ${GEMINIS_COMMON_SOURCES}
+    ${GEMINIS_FX_DSP_SOURCES}
+    Source/fx/Rack.cpp
+    Source/fx/FxProcessor.cpp
+    Source/fx/FxEditor.cpp
+    ${GEMINIS_INST_DSP_SOURCES}
+    Source/inst/InstProcessor.cpp
+    Source/inst/InstEditor.cpp)
+  list(REMOVE_DUPLICATES GEMINIS_APP_SOURCES)
+  target_sources(GeminisApp PRIVATE ${GEMINIS_APP_SOURCES})
+  target_include_directories(GeminisApp PRIVATE Source)
+  if(MSVC)
+    target_compile_options(GeminisApp PRIVATE /utf-8 /bigobj)
+  endif()
+  target_compile_definitions(GeminisApp PRIVATE ${GEMINIS_DEFINES} GEMINIS_PROGRAMA=1)
+  target_link_libraries(GeminisApp
+    PRIVATE
+      GeminisAssets
+      GeminisSamples
+      juce::juce_audio_utils
+      juce::juce_audio_formats
+      juce::juce_dsp
+      juce::juce_gui_extra
+    PUBLIC
+      juce::juce_recommended_config_flags
+      juce::juce_recommended_lto_flags)
 endif()
 
 #==============================================================================

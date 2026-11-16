@@ -1,6 +1,6 @@
 #pragma once
 #include "Theme.h"
-#include <array>
+#include <vector>
 
 namespace geminis
 {
@@ -12,7 +12,7 @@ namespace draw
 }
 
 /** Pantalla de inicio animada: cielo estrellado, constelación de Géminis,
-    emblema con halo y tres tarjetas para elegir el modo. */
+    emblema con halo y una tarjeta por modo (de 2 a 5). */
 class Splash : public juce::Component, private juce::Timer
 {
 public:
@@ -23,7 +23,7 @@ public:
         Icon icon;
     };
 
-    Splash (const juce::String& subtitle, std::array<Card, 3> cards);
+    Splash (const juce::String& subtitle, std::vector<Card> cards);
     ~Splash() override;
 
     std::function<void (int)> onChoose;
@@ -50,8 +50,8 @@ private:
     struct Shooting { float x = -1.0f, y = 0.0f, life = 0.0f; };
 
     juce::String subtitle, footer;
-    std::array<Card, 3> cards;
-    std::array<float, 3> hover {};
+    std::vector<Card> cards;
+    std::vector<float> hover;
     int hovered = -1;
     std::vector<Star> stars;
     Shooting shooting;

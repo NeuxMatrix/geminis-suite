@@ -276,4 +276,6 @@ void GeminisFxProcessor::setStateInformation (const void* data, int size)
 
 juce::AudioProcessorEditor* GeminisFxProcessor::createEditor() { return new GeminisFxEditor (*this); }
 
+#if ! GEMINIS_PROGRAMA  // el programa Géminis crea los dos procesadores por su cuenta
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new GeminisFxProcessor(); }
+#endif
