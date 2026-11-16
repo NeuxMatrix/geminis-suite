@@ -23,9 +23,13 @@ Todos los modelos son diseños propios con nombres propios. No se usan marcas ni
   octavador, wah, ecualizador, seis amplificadores (del limpio al bajo), pantallas con respuestas a impulso propias
   o tuyas, chorus, flanger, phaser, vibrato, trémolo, altavoz rotativo, delays (digital, cinta, analógico,
   ping-pong, multitap, inverso), reverbs (habitación, sala, placa, muelle, catedral, shimmer) y lo-fi.
-  Afinador en la barra superior.
+- **Afinador** a pantalla completa con el botón Afinador: nota grande, aguja de cents, la cuerda más cercana
+  (afinación estándar) y el nivel de entrada. Silencia la salida mientras afinas, como un pedal afinador.
 - **Voz:** ecualizador vocal, de-esser, compresor, saturación de cinta, doblador, afinación, modulación,
-  delays y reverbs.
+  delays y reverbs. La **afinación** lleva la voz a la nota de la escala elegida sin cambiar su timbre: con
+  velocidad 1 suena el efecto robótico y con valores medios corrige de forma natural. Añade unos 25 ms de
+  latencia, que el DAW compensa. El **doblador** suma dos tomas, una a cada lado, con su propio destiempo,
+  afinación y timbre.
 - Presets de fábrica por estilos para guitarra y voz, y los tuyos se guardan en `Documentos/Geminis/Presets FX`.
 - Sirve en directo con monitorización o sobre pistas ya grabadas. Selector de entrada mono o estéreo.
 
@@ -116,7 +120,9 @@ cmake -B build -DGEMINIS_BUILD_TESTS=ON
 cmake --build build --target GeminisDspTest GeminisInstTest
 ```
 
-- `GeminisDspTest` pasa guitarra y voz de prueba por los 27 módulos y todos los presets de Geminis FX.
+- `GeminisDspTest` pasa guitarra y voz de prueba por los 27 módulos y todos los presets de Geminis FX, y comprueba
+  que cada efecto hace lo que dice: el afinador acierta a menos de 1 cent, la afinación corrige una voz
+  desafinada, el doblador abre el estéreo y las modulaciones mueven el sonido de forma clara.
 - `GeminisInstTest` toca los 66 presets del sinte, los 16 kits y los 20 instrumentos, y mide sus niveles.
   También comprueba que la rueda de modulación curva el timbre, que responden los 16 pads con los dos mapas
   MIDI, que los 16 kits siguen la distribución de Maschine, que «Windows Audio» se abre a 44100 Hz y que el

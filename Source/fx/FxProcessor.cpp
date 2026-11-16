@@ -115,6 +115,13 @@ void GeminisFxProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     rack.process (L, R, n, ctx);
 
+    // Con el afinador abierto la salida se silencia, como en un pedal afinador
+    if (tuner.enabled.load() && tuner.muteOutput.load())
+    {
+        juce::FloatVectorOperations::clear (L, n);
+        juce::FloatVectorOperations::clear (R, n);
+    }
+
     const float gOut = juce::Decibels::decibelsToGain (outGain->load());
     float peak = 0.0f;
     for (int i = 0; i < n; ++i)

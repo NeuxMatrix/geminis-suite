@@ -785,7 +785,7 @@ private:
 class FlangerModule : public StereoModule
 {
 public:
-    void prepare (double sampleRate, int) override { sr = sampleRate; for (auto& d : dl) d.prepare ((int) (sr * 0.02)); reset(); }
+    void prepare (double sampleRate, int) override { sr = sampleRate; for (auto& d : dl) d.prepare ((int) (sr * 0.03)); reset(); }
     void reset() override { for (auto& d : dl) d.clear(); fb[0] = fb[1] = 0.0f; }
 
 private:
@@ -796,6 +796,9 @@ private:
     {
         const double inc = v[0] / sr;
         const float depth = v[1], base = v[2] * 0.001f * (float) sr, feedback = v[3] * 0.0095f, mix = v[4] * 0.01f;
+        // El retardo barre en escala exponencial: con 2 ms y profundidad 0,7 va de 0,8 a 5,3 ms,
+        // así las muescas recorren varias octavas (el «avión a reacción»).
+        const float sweep = depth * 2.0f;
         for (int i = 0; i < n; ++i)
         {
             const float ph = (float) lfo.phase;
@@ -807,12 +810,12 @@ private:
             const float mods[2] = { tri1, tri2 };
             for (int c = 0; c < 2; ++c)
             {
-                const float d = 1.0f + base * (1.0f + depth * mods[c]) * 0.5f + base * 0.5f;
+                const float d = std::max (1.0f, base * std::exp2 (sweep * mods[c]));
                 const float x = io[c][i];
                 dl[c].push (x + fastTanh (fb[c] * feedback));
                 const float w = dl[c].read (d);
                 fb[c] = w;
-                io[c][i] = x * (1.0f - 0.5f * mix) + w * mix;
+                io[c][i] = x * (1.0f - mix) + w * mix;   // al 50 % directo y retardo igual: muescas profundas
             }
         }
     }
@@ -842,7 +845,7 @@ private:
             for (int c = 0; c < 2; ++c)
             {
                 const float m = std::sin (twoPi * (ph + (c == 1 ? spread : 0.0f)));
-                const float f = clampf (centre * std::pow (4.0f, depth * m), 40.0f, (float) sr * 0.45f);
+                const float f = clampf (centre * std::pow (8.0f, depth * m), 40.0f, (float) sr * 0.45f);
                 const float t = std::tan (pi * f / (float) sr);
                 const float a = (t - 1.0f) / (t + 1.0f);
                 const float x = io[c][i];
@@ -854,7 +857,7 @@ private:
                     y = out;
                 }
                 fb[c] = y;
-                io[c][i] = x * (1.0f - 0.5f * mix) + y * mix;
+                io[c][i] = x * (1.0f - mix) + y * mix;   // al 50 % las muescas son completas
             }
         }
     }
@@ -985,11 +988,12 @@ private:
             const float hs = std::sin (twoPi * (float) hornPh), hc = std::cos (twoPi * (float) hornPh);
             const float ds = std::sin (twoPi * (float) drumPh);
             horn[0].push (hi); horn[1].push (hi);
-            const float dBase = 0.0025f * (float) sr, dMod = 0.0006f * (float) sr;
-            const float hl = horn[0].read (dBase + dMod * hs) * (1.0f - 0.35f * (0.5f + 0.5f * hc));
-            const float hr = horn[1].read (dBase - dMod * hs) * (1.0f - 0.35f * (0.5f - 0.5f * hc));
-            const float dl = lo * (1.0f - 0.25f * (0.5f + 0.5f * ds));
-            const float dr = lo * (1.0f - 0.25f * (0.5f - 0.5f * ds));
+            const float dBase = 0.0025f * (float) sr, dMod = 0.0009f * (float) sr;
+            // La bocina apunta hacia un lado y luego hacia el otro: volumen y brillo cambian mucho
+            const float hl = horn[0].read (dBase + dMod * hs) * (1.0f - 0.6f * (0.5f + 0.5f * hc));
+            const float hr = horn[1].read (dBase - dMod * hs) * (1.0f - 0.6f * (0.5f - 0.5f * hc));
+            const float dl = lo * (1.0f - 0.35f * (0.5f + 0.5f * ds));
+            const float dr = lo * (1.0f - 0.35f * (0.5f - 0.5f * ds));
             const float hornGain = 0.5f + balance, drumGain = 1.5f - balance;
             const float outL = hl * hornGain + dl * drumGain, outR = hr * hornGain + dr * drumGain;
             const float mid = 0.5f * (outL + outR), side = 0.5f * (outL - outR) * width;
@@ -1257,35 +1261,48 @@ public:
     void prepare (double sampleRate, int) override
     {
         sr = sampleRate;
-        for (auto& d : dl) d.prepare ((int) (sr * 0.08));
-        lfoA.seed = 111u; lfoB.seed = 999u;
+        for (auto& d : dl) d.prepare ((int) (sr * 0.09));
+        lfoA.seed = 111u; lfoB.seed = 999u; lfoC.seed = 4242u; lfoD.seed = 777u;
+        darkA.setCutoff (sr, 6500.0); thinB.setCutoff (sr, 180.0);
     }
-    void reset() override { for (auto& d : dl) d.clear(); }
+    void reset() override { for (auto& d : dl) d.clear(); darkA.reset(); thinB.reset(); }
 
 private:
     DelayBuffer dl[2];
-    Lfo lfoA, lfoB;
+    Lfo lfoA, lfoB, lfoC, lfoD;
+    OnePole darkA, thinB;
+
+    /** Simula dos tomas más, una a cada lado. Cada toma va un poco a destiempo y desafinada unos
+        cents de forma cambiante (como un cantante que repite la frase), y con un timbre algo distinto. */
     void run (float* L, float* R, int n, const float* v, const Context&) override
     {
         const float sep = v[0] * 0.001f * (float) sr, var = v[1], width = v[2], mix = v[3] * 0.01f;
+        const float drift = (0.002f + var * 0.006f) * (float) sr;      // destiempo cambiante de hasta 8 ms
+        const float wobble = (0.0004f + var * 0.0012f) * (float) sr;   // vaivén rápido: unos cents de afinación
+        const float gain = mix * 1.3f;
         for (int i = 0; i < n; ++i)
         {
             const float mono = 0.5f * (L[i] + R[i]);
             dl[0].push (mono); dl[1].push (mono);
-            const float ma = lfoA.next (0.9 / sr, Lfo::randomSmooth), mb = lfoB.next (1.1 / sr, Lfo::randomSmooth);
-            const float a = dl[0].read (sep + var * 0.003f * (float) sr * ma + 1.0f);
-            const float b = dl[1].read (sep * 1.35f + var * 0.003f * (float) sr * mb + 1.0f);
+            const float a1 = lfoA.next (0.35 / sr, Lfo::randomSmooth), b1 = lfoB.next (0.42 / sr, Lfo::randomSmooth);
+            const float a2 = lfoC.next (2.1 / sr, Lfo::randomSmooth), b2 = lfoD.next (2.6 / sr, Lfo::randomSmooth);
+            float a = dl[0].read (sep + drift * (0.5f + 0.5f * a1) + wobble * a2 + 2.0f);
+            float b = dl[1].read (sep * 1.4f + drift * (0.5f + 0.5f * b1) + wobble * b2 + 2.0f);
+            a = darkA.lowpass (a);                 // una toma algo más oscura
+            b = b - thinB.lowpass (b);             // y la otra con menos graves
             const float vl = a * (0.5f + 0.5f * width) + b * (0.5f - 0.5f * width);
             const float vr = b * (0.5f + 0.5f * width) + a * (0.5f - 0.5f * width);
-            L[i] = L[i] + vl * mix * 0.8f;
-            R[i] = R[i] + vr * mix * 0.8f;
+            L[i] = L[i] + vl * gain;
+            R[i] = R[i] + vr * gain;
         }
     }
 };
 
 //==============================================================================
-/** Afinación automática: detecta el tono (YIN sobre señal diezmada) y lo
-    lleva a la nota más cercana de la escala con un desplazador granular. */
+/** Afinación automática con PSOLA. Detecta el periodo de la voz (YIN sobre señal diezmada) y la
+    vuelve a construir con granos de dos periodos colocados a la distancia del periodo corregido.
+    Así cambia la afinación sin cambiar el timbre de la voz y sin la ondulación de un desplazador
+    de granos fijo. Necesita unos 25 ms de anticipación, que se comunican al DAW como latencia. */
 class AutotuneModule : public Module
 {
 public:
@@ -1297,31 +1314,48 @@ public:
         aa.setLowpass (sr, dsr * 0.4, 0.7);
         aa2.setLowpass (sr, dsr * 0.4, 0.7);
         ring.assign (2048, 0.0f);
-        diff.assign (520, 1.0f);
-        shifter.prepare (sr, 120.0f);
+        diff.assign (600, 1.0f);
+        maxPeriod = (int) std::ceil (sr / lowestHz);
+        latency = 2 * maxPeriod + 8;
+        int size = 1;
+        while (size < 4 * latency + 4096) size <<= 1;
+        mask = size - 1;
+        in.assign ((size_t) size, 0.0f);
+        out.assign ((size_t) size, 0.0f);
         reset();
     }
+
+    int getLatency() const override { return latency; }
 
     void reset() override
     {
         std::fill (ring.begin(), ring.end(), 0.0f);
-        shifter.clear();
-        ratio = 1.0f; targetRatio = 1.0f; detectedHz = 0.0f;
+        std::fill (in.begin(), in.end(), 0.0f);
+        std::fill (out.begin(), out.end(), 0.0f);
+        aa.reset(); aa2.reset();
+        ratio = 1.0f; targetRatio = 1.0f; targetNote = -1.0f;
+        period = unvoicedPeriod(); voiced = false;
+        recent[0] = recent[1] = recent[2] = 0.0f;
         writePos = 0; decimCount = 0; hopCount = 0;
+        now = 0;
+        nextMark = anaMark = (double) latency;
     }
 
     void process (float* L, float* R, int n, const float* v, Context& ctx) override
     {
         key = (int) v[0];
         scale = (int) v[1];
-        const float speed = v[2];
+        const float speed = clampf (v[2], 0.0f, 1.0f);
         const float mix = v[3] * 0.01f;
-        const float retuneMs = lerp (300.0f, 0.5f, speed * speed);
+        // Velocidad 1: corrección instantánea (efecto robótico); 0,6: firme pero natural; 0: muy lenta
+        const float retuneMs = 1.0f + 400.0f * (1.0f - speed) * (1.0f - speed) * (1.0f - speed);
         const float k = 1.0f - std::exp (-1.0f / (retuneMs * 0.001f * (float) sr));
 
         for (int i = 0; i < n; ++i)
         {
             const float mono = ctx.stereo ? 0.5f * (L[i] + R[i]) : L[i];
+            in[(size_t) (now & mask)] = mono;
+
             const float filtered = aa2.process (aa.process (mono));
             if (++decimCount >= decim)
             {
@@ -1331,26 +1365,63 @@ public:
                 if (++hopCount >= 128) { hopCount = 0; analyse(); }
             }
             ratio += (targetRatio - ratio) * k;
-            const float shifted = std::abs (ratio - 1.0f) < 0.0005f ? shifter.process (mono, 1.0f, 28.0f)
-                                                                      : shifter.process (mono, ratio, 28.0f);
-            const float out = mono * (1.0f - mix) + shifted * mix;
-            L[i] = out;
-            if (ctx.stereo) R[i] = out;
+
+            // Coloca los granos que ya tienen toda su entrada disponible
+            while (nextMark + (double) grainPeriod() + 1.0 <= (double) now)
+                placeGrain();
+
+            const std::int64_t readPos = now - latency;
+            const float wet = out[(size_t) (readPos & mask)];
+            out[(size_t) (readPos & mask)] = 0.0f;
+            const float dry = in[(size_t) (readPos & mask)];
+            const float y = dry * (1.0f - mix) + wet * mix;
+            L[i] = y;
+            if (ctx.stereo) R[i] = y;
+            ++now;
         }
         if (! ctx.stereo) std::copy (L, L + n, R);
     }
 
 private:
+    static constexpr float lowestHz = 80.0f;
+    float unvoicedPeriod() const { return (float) (sr * 0.005); }
+    float grainPeriod() const { return voiced ? period : unvoicedPeriod(); }
+
+    void placeGrain()
+    {
+        const float P = grainPeriod();
+        const float r = voiced ? ratio : 1.0f;
+        // Centro de análisis: el punto de la rejilla de periodos más cercano por detrás de la marca de síntesis
+        const double steps = std::floor ((nextMark - anaMark) / (double) P + 1.0e-6);
+        const double a = anaMark + steps * (double) P;
+        const std::int64_t centre = (std::int64_t) std::llround (nextMark);
+        const double offset = a - (double) centre;          // posición de entrada = salida + offset
+        const int half = (int) std::ceil (P);
+        const float gain = 1.0f / r;                        // los granos se solapan más al subir el tono
+        for (int j = -half; j <= half; ++j)
+        {
+            const float w = std::abs ((float) j) >= P ? 0.0f : 0.5f + 0.5f * std::cos (pi * (float) j / P);
+            if (w <= 0.0f) continue;
+            const double ip = (double) (centre + j) + offset;
+            const std::int64_t i0 = (std::int64_t) std::floor (ip);
+            const float f = (float) (ip - (double) i0);
+            const float x0 = in[(size_t) (i0 & mask)], x1 = in[(size_t) ((i0 + 1) & mask)];
+            out[(size_t) ((centre + j) & mask)] += (x0 + (x1 - x0) * f) * w * gain;
+        }
+        anaMark = a;
+        nextMark += (double) (P / r);
+    }
+
     void analyse()
     {
         const int W = 384;
-        const int tauMin = (int) (dsr / 1000.0), tauMax = std::min ((int) (dsr / 70.0), 500);
+        const int tauMin = (int) (dsr / 1000.0), tauMax = std::min ((int) (dsr / (lowestHz - 5.0f)), (int) diff.size() - 2);
         const int start = (writePos - W - tauMax - 2 + 2048) & 2047;
         auto at = [this, start] (int i) { return ring[(size_t) ((start + i) & 2047)]; };
 
         float energy = 0.0f;
         for (int i = 0; i < W; ++i) energy += at (i) * at (i);
-        if (energy < 1.0e-4f) { targetRatio = 1.0f; detectedHz = 0.0f; return; }
+        if (energy < 1.0e-4f) { unvoice(); return; }
 
         float running = 0.0f;
         diff[0] = 1.0f;
@@ -1362,34 +1433,49 @@ private:
             diff[(size_t) tau] = running > 0.0f ? d * (float) tau / running : 1.0f;
         }
 
-        // Primer mínimo por debajo del umbral; si no hay, el mínimo global si es claro
         int best = -1;
         for (int tau = tauMin; tau < tauMax; ++tau)
-        {
             if (diff[(size_t) tau] < 0.15f)
             {
                 while (tau + 1 < tauMax && diff[(size_t) tau + 1] < diff[(size_t) tau]) ++tau;
                 best = tau;
                 break;
             }
-        }
         if (best < 0)
         {
             int m = tauMin;
             for (int tau = tauMin; tau < tauMax; ++tau)
                 if (diff[(size_t) tau] < diff[(size_t) m]) m = tau;
-            if (diff[(size_t) m] < 0.3f) best = m;
+            if (diff[(size_t) m] < 0.25f) best = m;
         }
-        if (best < 2) { targetRatio = 1.0f; detectedHz = 0.0f; return; }
+        if (best < 2) { unvoice(); return; }
 
         const float a = diff[(size_t) best - 1], b = diff[(size_t) best], c = diff[(size_t) best + 1];
         const float denom = a - 2.0f * b + c;
         const float refined = (float) best + (std::abs (denom) > 1.0e-6f ? 0.5f * (a - c) / denom : 0.0f);
-        detectedHz = (float) dsr / refined;
+        float hz = (float) dsr / refined;
 
-        const float note = 69.0f + 12.0f * std::log2 (detectedHz / 440.0f);
-        const float target = nearestInScale (note);
-        targetRatio = clampf (std::pow (2.0f, (target - note) / 12.0f), 0.7f, 1.4f);
+        // Mediana de las tres últimas lecturas: quita saltos sueltos de octava
+        recent[0] = recent[1]; recent[1] = recent[2]; recent[2] = hz;
+        if (recent[0] > 0.0f && recent[1] > 0.0f)
+            hz = std::max (std::min (recent[0], recent[1]), std::min (std::max (recent[0], recent[1]), recent[2]));
+
+        period = clampf ((float) sr / hz, 8.0f, (float) maxPeriod);
+        voiced = true;
+
+        const float note = 69.0f + 12.0f * std::log2 (hz / 440.0f);
+        // Histéresis: no cambia de nota objetivo hasta pasar claramente a la siguiente
+        if (targetNote < 0.0f || std::abs (note - targetNote) > 0.65f)
+            targetNote = nearestInScale (note);
+        targetRatio = clampf (std::pow (2.0f, (targetNote - note) / 12.0f), 0.7f, 1.4f);
+    }
+
+    void unvoice()
+    {
+        voiced = false;
+        targetRatio = 1.0f;
+        targetNote = -1.0f;
+        recent[0] = recent[1] = recent[2] = 0.0f;
     }
 
     float nearestInScale (float note) const
@@ -1418,10 +1504,14 @@ private:
 
     double sr = 44100.0, dsr = 22050.0;
     int decim = 2, decimCount = 0, hopCount = 0, writePos = 0, key = 0, scale = 0;
+    int maxPeriod = 552, latency = 1112, mask = 0;
     Biquad aa, aa2;
-    std::vector<float> ring, diff;
-    GrainShifter shifter;
-    float ratio = 1.0f, targetRatio = 1.0f, detectedHz = 0.0f;
+    std::vector<float> ring, diff, in, out;
+    std::int64_t now = 0;
+    double nextMark = 0.0, anaMark = 0.0;
+    float period = 220.0f, ratio = 1.0f, targetRatio = 1.0f, targetNote = -1.0f;
+    float recent[3] {};
+    bool voiced = false;
 };
 
 class LofiModule : public Module
@@ -1576,9 +1666,9 @@ const std::vector<ModuleInfo>& catalog()
                        { choice ("Forma", { "Seno", "Triángulo", "Cuadrada", "Armónico" }, 0),
                          knob ("Velocidad", 0.5f, 15.0f, 4.0f, "Hz", 0.6f),
                          choice ("Sincronía", { "Libre", "1/4", "1/4 con puntillo", "1/8", "1/8 con puntillo", "1/8 tresillo", "1/16" }, 0),
-                         knob ("Profundidad", 0.0f, 100.0f, 50.0f, "%"), knob ("Estéreo", 0.0f, 1.0f, 0.0f) }, make<TremoloModule>() });
+                         knob ("Profundidad", 0.0f, 100.0f, 60.0f, "%"), knob ("Estéreo", 0.0f, 1.0f, 0.0f) }, make<TremoloModule>() });
         m.push_back ({ "Rotativo", "Modulación", forBoth, cMod, "Altavoz giratorio con bocina y tambor.",
-                       { choice ("Velocidad", { "Lento", "Rápido" }, 0), knob ("Aceleración", 0.2f, 5.0f, 1.2f, "s", 0.6f),
+                       { choice ("Velocidad", { "Lento", "Rápido" }, 1), knob ("Aceleración", 0.2f, 5.0f, 1.2f, "s", 0.6f),
                          knob ("Bocina", 0.0f, 1.0f, 0.5f), knob ("Saturación", 0.0f, 1.0f, 0.2f), knob ("Anchura", 0.0f, 1.0f, 0.8f) },
                        make<RotaryModule>() });
 
