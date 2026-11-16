@@ -1,0 +1,76 @@
+# Cada push a main que toque web/ construye la imagen de la web, la sube a
+# ghcr.io y la arranca en el VPS, igual que el resto de webs de NeuxMatrix.
+# Necesita el secret del repositorio VPS_SSH_KEY (clave privada del usuario deploy).
+name: Desplegar la web
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/desplegar-web.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: despliegue
+  cancel-in-progress: false
+
+env:
+  APP: geminis
+  IMAGEN: ghcr.io/neuxmatrix/geminis-web
+  VPS: 132.243.166.66
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y subir la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: web
+          push: true
+          tags: |
+            ${{ env.IMAGEN }}:latest
+            ${{ env.IMAGEN }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Preparar el acceso SSH al VPS
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "::error::Falta el secret VPS_SSH_KEY en este repositorio (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps
+          chmod 600 ~/.ssh/vps
+          ssh-keyscan -H "$VPS" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Copiar los ficheros de despliegue
+        run: |
+          ssh -i ~/.ssh/vps deploy@"$VPS" "mkdir -p /opt/neux/apps/$APP"
+          scp -i ~/.ssh/vps web/deploy/compose.yml web/deploy/arrancar.sh "web/deploy/$APP.caddy" deploy@"$VPS":/opt/neux/apps/$APP/
+
+      - name: Arrancar en el VPS
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | ssh -i ~/.ssh/vps deploy@"$VPS" \
+            "bash /opt/neux/apps/$APP/arrancar.sh $APP ${{ github.sha }} ${{ github.actor }}"
+
+      - name: Comprobar que responde el dominio
+        run: |
+          dominios=$(grep -E '^[A-Za-z0-9.-]+(, *[A-Za-z0-9.-]+)* *\{' "web/deploy/$APP.caddy" | sed 's/ *{.*//' | tr ',' '\n' | tr -d ' ')
+          for d in $dominios; do
+            echo "-> https://$d"
+            curl -fsS --retry 12 --retry-delay 5 --retry-all-errors -o /dev/null "https://$d"
+          done

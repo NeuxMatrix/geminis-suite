@@ -3,7 +3,7 @@ name: Compilar Geminis
 on:
   push:
     branches: ['**']
-    paths-ignore: ['web/**', '.github/workflows/web.yml']
+    paths-ignore: ['web/**', '.github/workflows/desplegar-web.yml']
   workflow_dispatch:
 
 jobs:

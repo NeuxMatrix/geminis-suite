@@ -1,0 +1,13 @@
+# Caddy dentro del contenedor: sirve la web en el puerto 8080.
+# El HTTPS y el dominio los pone el Caddy del VPS, que hace de proxy delante.
+{
+	admin off
+}
+
+:8080 {
+	root * /srv
+	encode gzip
+	header /img/* Cache-Control "public, max-age=604800"
+	header /audio/* Cache-Control "public, max-age=604800"
+	file_server
+}
