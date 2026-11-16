@@ -1,0 +1,77 @@
+# Publica una versión en GitHub Releases con los archivos de la última compilación en verde de main.
+# No compila nada: reutiliza el instalador de Windows y los paquetes de macOS de «Compilar Geminis»,
+# así no gasta minutos de Windows ni de macOS.
+# Se lanza subiendo una rama «publicar/<versión>» o a mano desde Actions. Las notas de la versión
+# van en .github/notas/v<versión>.md, y la versión sale de CMakeLists.txt del commit compilado.
+# Los botones de descarga de la web apuntan a releases/latest.
+name: Publicar versión
+
+on:
+  push:
+    branches: ['publicar/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publicar-version
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Buscar la última compilación en verde de main
+        id: run
+        run: |
+          read -r id sha < <(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?branch=main&status=success&per_page=1" \
+                               --jq '.workflow_runs[0] | "\(.id) \(.head_sha)"')
+          test -n "$id" && test -n "$sha"
+          version=$(gh api "repos/$GITHUB_REPOSITORY/contents/CMakeLists.txt?ref=$sha" --jq .content | base64 -d \
+                      | sed -nE 's/^project\(GeminisSuite VERSION ([0-9.]+).*/\1/p')
+          test -n "$version"
+          echo "Compilación $id, commit $sha, versión $version"
+          { echo "id=$id"; echo "sha=$sha"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+          path: descargas
+
+      - name: Preparar los archivos
+        env:
+          VERSION: ${{ steps.run.outputs.version }}
+        run: |
+          mkdir -p publicar mac/VST3 mac/AU
+          cp descargas/Geminis-Instalador-Windows/*.exe "publicar/Geminis-Suite-$VERSION-Instalador.exe"
+          # Los artefactos de Actions pierden el permiso de ejecución: se devuelve a los binarios de cada paquete.
+          find descargas/Geminis-macOS -path '*/Contents/MacOS/*' -type f -exec chmod +x {} +
+          find descargas/Geminis-macOS -name '*.app' -prune -exec cp -R {} mac/ \;
+          find descargas/Geminis-macOS -path '*/VST3/*.vst3' -prune -exec cp -R {} mac/VST3/ \;
+          find descargas/Geminis-macOS -path '*/AU/*.component' -prune -exec cp -R {} mac/AU/ \;
+          test -n "$(ls mac/*.app)" && test -n "$(ls mac/VST3)" && test -n "$(ls mac/AU)"
+          (cd mac && zip -qry "../publicar/Geminis-Suite-$VERSION-macOS.zip" .)
+          ls -la publicar
+
+      - name: Crear la versión
+        env:
+          VERSION: ${{ steps.run.outputs.version }}
+          SHA: ${{ steps.run.outputs.sha }}
+        run: |
+          notas=".github/notas/v$VERSION.md"
+          test -f "$notas"
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            gh release upload "v$VERSION" publicar/* --clobber
+          else
+            gh release create "v$VERSION" publicar/* --target "$SHA" --title "Géminis Suite $VERSION" \
+              --notes-file "$notas" --latest
+          fi
+          gh release view "v$VERSION" --json url,assets --jq '.url, (.assets[] | "\(.name) \(.size)")'
