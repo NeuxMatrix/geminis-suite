@@ -970,14 +970,35 @@ public:
         }
         const int m = juce::roundToInt (map->load());
         if (m != lastMap) { lastMap = m; dirty = true; }
+        const int root = proc.drums.midiRoot.load();
+        if (root != lastRoot) { lastRoot = root; dirty = true; }
+        const auto notes = proc.drums.midiNotesReceived.load();
+        if (notes != lastMidiNotes) { lastMidiNotes = notes; midiFlash = 1.0f; dirty = true; }
+        else if (midiFlash > 0.01f) { midiFlash *= 0.85f; dirty = true; }
         if (dirty) repaint();
     }
 
     void paintExtra (juce::Graphics& g) override
     {
+        const auto mapText = lastMap == 1 ? U ("MAPA GENERAL MIDI")
+                                          : U ("MAPA MASCHINE · PAD 1 = ") + juce::MidiMessage::getMidiNoteName (lastRoot, true, true, 3);
+        const auto headerFont = Fonts::ui (10.0f, 600);
         g.setColour (colours::textFaint);
-        g.setFont (Fonts::ui (10.0f, 600));
-        g.drawText (lastMap == 1 ? U ("MAPA GENERAL MIDI") : U ("MAPA MASCHINE · C1 = PAD 1"), header().toFloat(), juce::Justification::centredRight);
+        g.setFont (headerFont);
+        g.drawText (mapText, header().toFloat(), juce::Justification::centredRight);
+
+        // Piloto MIDI: se enciende con cada nota que llega (si no se enciende, no llega MIDI)
+        {
+            const auto h = header().toFloat();
+            const float textW = juce::GlyphArrangement::getStringWidth (headerFont, mapText);
+            auto midiArea = h.withRight (h.getRight() - textW - 12.0f).removeFromRight (44.0f);
+            const auto dot = midiArea.removeFromLeft (10.0f).withSizeKeepingCentre (6.0f, 6.0f);
+            g.setColour (lastMidiNotes == 0 ? colours::textFaint.withAlpha (0.4f)
+                                            : colours::textFaint.interpolatedWith (juce::Colours::limegreen, midiFlash));
+            g.fillEllipse (dot);
+            g.setColour (colours::textFaint);
+            g.drawText ("MIDI", midiArea, juce::Justification::centredLeft);
+        }
 
         const auto& names = drumSoundNames();
         for (int i = 0; i < numPads; ++i)
@@ -1003,7 +1024,8 @@ public:
             g.drawText (juce::String (i + 1), r.reduced (8.0f, 6.0f), juce::Justification::topLeft);
             g.setColour (colours::textFaint);
             g.setFont (Fonts::ui (10.0f, 600));
-            g.drawText (juce::MidiMessage::getMidiNoteName (padToNote (i, lastMap), true, true, 3), r.reduced (8.0f, 6.0f), juce::Justification::topRight);
+            g.drawText (juce::MidiMessage::getMidiNoteName (lastMap == 1 ? padToNote (i, 1) : lastRoot + i, true, true, 3),
+                        r.reduced (8.0f, 6.0f), juce::Justification::topRight);
             g.setColour (colours::text);
             g.setFont (Fonts::ui (12.0f, 600));
             g.drawFittedText (name, r.reduced (6.0f, 8.0f).toNearestInt(), juce::Justification::centredBottom, 2, 0.85f);
@@ -1045,7 +1067,9 @@ private:
     std::array<juce::uint32, numPads> lastHits {};
     std::array<float, numPads> flash {};
     std::array<int, numPads> lastSounds {};
-    int lastMap = -1;
+    int lastMap = -1, lastRoot = 36;
+    juce::uint32 lastMidiNotes = 0;
+    float midiFlash = 0.0f;
 };
 
 class StepGrid : public juce::Component, public juce::SettableTooltipClient

@@ -78,6 +78,14 @@ int padToNote (int pad, int map)
     return map == 1 ? gmNotes[pad] : 36 + pad;
 }
 
+int maschineNoteToPad (int note, int& root)
+{
+    if (note < 0 || note > 127) return -1;
+    if (note < root || note > root + numPads - 1)
+        root = 12 * (note / 12);
+    return note - root;
+}
+
 int noteToPad (int note, int map)
 {
     if (map == 0) return note >= 36 && note < 36 + numPads ? note - 36 : -1;
@@ -584,15 +592,18 @@ void DrumEngine::render (float* L, float* R, int numSamples, const juce::MidiBuf
 
     // Notas MIDI
     const int map = juce::roundToInt (midiMap->load());
+    int root = midiRoot.load();
     for (const auto meta : midi)
     {
         const auto m = meta.getMessage();
         if (m.isNoteOn())
         {
-            const int pad = noteToPad (m.getNoteNumber(), map);
+            midiNotesReceived.fetch_add (1);
+            const int pad = map == 0 ? maschineNoteToPad (m.getNoteNumber(), root) : noteToPad (m.getNoteNumber(), map);
             if (pad >= 0) add (meta.samplePosition, pad, m.getFloatVelocity());
         }
     }
+    midiRoot.store (root);
 
     // Secuenciador
     const int mode = juce::roundToInt (seqMode->load());

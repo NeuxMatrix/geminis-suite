@@ -58,6 +58,11 @@ Todos los modelos son diseños propios con nombres propios. No se usan marcas ni
   | 1 (abajo) | 1-4 | 1 bombo · 2 caja · 3 charles cerrado · 4 charles abierto |
 
 - **Mapa MIDI de Maschine** (pad 1 = C1, nota 36) o **General MIDI** (bombo 36, caja 38, charles 42 y 46...).
+  El mapa de Maschine sigue la octava que llegue: la Maschine en modo MIDI, sin su software, manda los pads
+  desde otra octava, y basta con tocar cualquiera de los pads 1 a 12 para que el programa la siga. El piloto
+  **MIDI** de la batería se enciende con cada nota que llega.
+- **Tocar con la Maschine MK3 en el programa Géminis:** cierra el software de Maschine y pulsa **SHIFT + CHANNEL
+  (MIDI)** en la Maschine para ponerla en modo MIDI. Sus entradas MIDI se activan solas.
 - 18 sonidos de batería sintetizados, 29 acústicos grabados y 3 melódicos (nota pulsada, acorde menor con
   séptima y voz cantando «aa»), en do y transportables con la afinación. Cada pad tiene afinación, caída, tono,
   golpe, saturación, nivel, panorama y grupo de corte.
