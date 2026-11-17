@@ -368,6 +368,7 @@ void GeminisInstrumentProcessor::getStateInformation (juce::MemoryBlock& dest)
     state.setProperty ("kit", kit, nullptr);
     state.setProperty ("kitName", kitName, nullptr);
     state.setProperty ("padLayout", padLayoutVersion, nullptr);
+    state.setProperty ("midiRoot", drums.midiRoot.load(), nullptr);
     state.setProperty ("program", currentProgram, nullptr);
     state.setProperty ("drawn1", synth.getDrawnWave (0).toString(), nullptr);
     state.setProperty ("drawn2", synth.getDrawnWave (1).toString(), nullptr);
@@ -422,6 +423,8 @@ void GeminisInstrumentProcessor::setStateInformation (const void* data, int size
     if (snaps.isValid()) state.removeChild (snaps, nullptr);
     const bool oldPadLayout = (int) state.getProperty ("padLayout", 0) < padLayoutVersion;
     state.removeProperty ("padLayout", nullptr);
+    drums.midiRoot.store (juce::jlimit (0, 112, (int) state.getProperty ("midiRoot", 36)));
+    state.removeProperty ("midiRoot", nullptr);
     apvts.replaceState (state);
 
     // Guardado con una distribución de pads anterior: pads y patrones de fábrica del mismo kit

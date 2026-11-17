@@ -375,6 +375,36 @@ int main (int argc, char** argv)
         check (sounding == numPads, "no responden todos los pads por MIDI");
     }
 
+    // La Maschine en modo MIDI (sin su software) manda los pads desde otra octava: también suenan
+    {
+        int root = 36;
+        bool ok = maschineNoteToPad (36, root) == 0 && maschineNoteToPad (51, root) == 15 && root == 36;
+        ok = ok && maschineNoteToPad (12, root) == 0 && root == 12 && maschineNoteToPad (27, root) == 15 && maschineNoteToPad (24, root) == 12;
+        root = 36;
+        ok = ok && maschineNoteToPad (24, root) == 0 && maschineNoteToPad (13, root) == 1 && root == 12 && maschineNoteToPad (24, root) == 12;
+        check (ok, "el mapa de Maschine no sigue la octava de la Maschine");
+
+        proc->applyKit (0);
+        proc->setParam ("seq_mode", 0.0f);
+        proc->setParam ("midi_map", 0.0f);
+        int sounding = 0;
+        for (int startC : { 0, 12, 24, 60 })
+        {
+            proc->drums.midiRoot.store (36);   // como al abrir el programa
+            int padsOk = 0;
+            for (int pad = 0; pad < numPads; ++pad)
+            {
+                const auto before = proc->drums.hitCount[(size_t) pad].load();
+                render (*proc, 0.1, { { 0.0, 0.05, startC + pad, 0.9f } });
+                if (proc->drums.hitCount[(size_t) pad].load() != before) ++padsOk;
+            }
+            if (padsOk == numPads) ++sounding;
+        }
+        proc->drums.midiRoot.store (36);
+        std::printf ("Maschine en modo MIDI: los 16 pads suenan desde %d de 4 octavas\n", sounding);
+        check (sounding == 4, "los pads no suenan si la Maschine manda otra octava");
+    }
+
     // Distribución de Maschine en los 16 kits: fila 1 bombo, caja y charles; fila 4 melodía, acorde, voz y efecto
     {
         int wrong = 0;

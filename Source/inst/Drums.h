@@ -58,6 +58,12 @@ int padToNote (int pad, int map);
 /** Pad que corresponde a una nota (o -1). */
 int noteToPad (int note, int map);
 
+/** Mapa de Maschine en cualquier octava. La Maschine en modo MIDI (sin su software) manda los pads
+    desde otra octava según la plantilla (C-2, C-1...). Los 16 pads son notas seguidas desde una C:
+    si llega una nota fuera de [root, root + 15], el pad 1 pasa a la C de esa nota. Así la primera nota
+    de los pads 1 a 12 ya fija la octava. Devuelve el pad (0-15) y actualiza root. */
+int maschineNoteToPad (int note, int& root);
+
 class DrumEngine
 {
 public:
@@ -78,6 +84,8 @@ public:
     void setStep (int pattern, int pad, int step, int value);
     std::atomic<int> currentStep { -1 };
     std::array<std::atomic<juce::uint32>, numPads> hitCount {};
+    std::atomic<int> midiRoot { 36 };                  // nota del pad 1 con el mapa de Maschine
+    std::atomic<juce::uint32> midiNotesReceived { 0 }; // para el piloto MIDI de la pantalla
 
     /** Escribe el patrón como archivo MIDI (un compás o dos). */
     juce::File exportMidi (int pattern, const juce::String& kitName) const;
