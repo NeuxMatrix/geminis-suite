@@ -108,6 +108,9 @@ Después, vuelve a buscar plugins en tu DAW. En Maschine: Preferencias > Plug-in
   **ASIO** y en «Dispositivo» tu tarjeta. Es la opción con menos latencia. Si no sale, instala el driver del
   fabricante (en Maschine, desde Native Access). Muchos drivers ASIO solo dejan usar la tarjeta a un programa
   a la vez: si no se abre, cierra el software de Maschine u otro programa de audio.
+- Con ASIO, Windows no toca el volumen del programa. Por eso Géminis sigue él mismo el **volumen y el silencio de
+  Windows** (las teclas de volumen del teclado y el icono del altavoz) de la salida por defecto. Se puede quitar en
+  Ajustes de audio con la casilla «Con ASIO, seguir el volumen y el silencio de Windows».
 - Si abres una batería guardada con una versión anterior, los pads vuelven a la distribución de Maschine.
 
 ## Compilar

@@ -3,6 +3,7 @@
 // Uso: GeminisInstTest [carpeta_para_wav]
 #include "inst/InstProcessor.h"
 #include "app/SharedRateDevices.h"
+#include "app/SystemVolume.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <cstdio>
 #include <complex>
@@ -553,6 +554,23 @@ int main (int argc, char** argv)
         check (relaid->getKit() == hipHop && std::abs (relaid->getParam ("seq_bpm") - 77.0f) < 0.5f,
                "un estado antiguo pierde el kit o el tempo");
         std::printf ("Estado antiguo de «Hip hop»: %d de 16 pads en su sitio\n", numPads - wrongPads);
+    }
+
+    //==========================================================================
+    // Programa Géminis: con ASIO se aplica el volumen y el silencio de Windows; con el resto, Windows ya lo hace
+    {
+        using namespace geminis::app;
+        SystemVolume half; half.available = true; half.gain = 0.25f;
+        SystemVolume mutedVol = half; mutedVol.muted = true;
+        const bool ok = outputGainFor ("ASIO", true, half) == 0.25f
+                     && outputGainFor ("ASIO", true, mutedVol) == 0.0f
+                     && outputGainFor ("ASIO", false, half) == 1.0f
+                     && outputGainFor ("Windows Audio", true, half) == 1.0f
+                     && outputGainFor ("ASIO", true, SystemVolume()) == 1.0f;
+        check (ok, "el volumen de Windows no se aplica bien con ASIO");
+       #if ! JUCE_WINDOWS
+        check (! readSystemVolume().available, "fuera de Windows no debe haber volumen del sistema");
+       #endif
     }
 
     //==========================================================================
