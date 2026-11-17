@@ -13,6 +13,7 @@
 #include "../fx/FxProcessor.h"
 #include "../inst/InstProcessor.h"
 #include "SharedRateDevices.h"
+#include "SystemVolume.h"
 
 #ifndef GEMINIS_VERSION
  #define GEMINIS_VERSION "0.0.0"
@@ -87,12 +88,19 @@ public:
 class AudioSettings : public juce::Component
 {
 public:
-    AudioSettings (juce::AudioDeviceManager& dm, juce::Value& muteInput, juce::LookAndFeel& lnf)
+    AudioSettings (juce::AudioDeviceManager& dm, juce::Value& muteInput, juce::Value& followSystemVolume, juce::LookAndFeel& lnf)
         : selector (dm, 0, 2, 0, 2, true, false, true, false)
     {
         setLookAndFeel (&lnf);
         muteToggle.setButtonText (U ("Silenciar la entrada de audio para que no se acople"));
         muteToggle.getToggleStateValue().referTo (muteInput);
+       #if JUCE_ASIO
+        volumeToggle.setButtonText (U ("Con ASIO, seguir el volumen y el silencio de Windows (teclas de volumen)"));
+        volumeToggle.getToggleStateValue().referTo (followSystemVolume);
+        addAndMakeVisible (volumeToggle);
+       #else
+        juce::ignoreUnused (followSystemVolume);
+       #endif
         hint.setText (U ("Si tocas con el micro y los altavoces del portátil, usa auriculares."), juce::dontSendNotification);
        #if JUCE_ASIO
         asioHint.setText (U ("¿Tarjeta de sonido como la Maschine? Elige ASIO en «Tipo de dispositivo»."), juce::dontSendNotification);
@@ -105,7 +113,7 @@ public:
         }
         addAndMakeVisible (muteToggle);
         addAndMakeVisible (selector);
-        setSize (580, 660 + (asioHint.getText().isEmpty() ? 0 : 22));
+        setSize (580, 660 + (asioHint.getText().isEmpty() ? 0 : 22) + (volumeToggle.isVisible() ? 30 : 0));
     }
 
     ~AudioSettings() override { setLookAndFeel (nullptr); }
@@ -116,6 +124,8 @@ public:
     {
         auto r = getLocalBounds().reduced (16, 12);
         muteToggle.setBounds (r.removeFromTop (30));
+        if (volumeToggle.isVisible())
+            volumeToggle.setBounds (r.removeFromTop (30));
         hint.setBounds (r.removeFromTop (22).withTrimmedLeft (4));
         if (asioHint.getText().isNotEmpty())
             asioHint.setBounds (r.removeFromTop (22).withTrimmedLeft (4));
@@ -124,7 +134,7 @@ public:
     }
 
 private:
-    juce::ToggleButton muteToggle;
+    juce::ToggleButton muteToggle, volumeToggle;
     juce::Label hint, asioHint;
     juce::AudioDeviceSelectorComponent selector;
 };
@@ -170,7 +180,8 @@ private:
 //==============================================================================
 class MainComponent : public juce::Component,
                       private juce::AudioIODeviceCallback,
-                      private juce::Value::Listener
+                      private juce::Value::Listener,
+                      private juce::Timer
 {
 public:
     MainComponent (juce::PropertiesFile& s, juce::LookAndFeel& l)
@@ -192,14 +203,18 @@ public:
         muteValue = settings.getBoolValue ("silenciarEntrada", true);
         muted = (bool) muteValue.getValue();
         muteValue.addListener (this);
+        followSystemVolume = settings.getBoolValue ("seguirVolumenWindows", true);
+        followSystemVolume.addListener (this);
 
         startAudio();
+        startTimer (120);   // volumen de Windows
         showLauncher();
     }
 
     ~MainComponent() override
     {
         geminis::homeHandler() = nullptr;
+        stopTimer();
         saveState();
         midiListConnection.reset();
         deviceManager.removeMidiInputDeviceCallback ({}, &player);
@@ -279,7 +294,7 @@ public:
     void openAudioSettings()
     {
         juce::DialogWindow::LaunchOptions o;
-        o.content.setOwned (new AudioSettings (deviceManager, muteValue, lnf));
+        o.content.setOwned (new AudioSettings (deviceManager, muteValue, followSystemVolume, lnf));
         o.dialogTitle = U ("Ajustes de audio");
         o.dialogBackgroundColour = colours::bg2;
         o.componentToCentreAround = this;
@@ -305,6 +320,7 @@ public:
             settings.setValue ("audio", xml.get());
 
         settings.setValue ("silenciarEntrada", (bool) muteValue.getValue());
+        settings.setValue ("seguirVolumenWindows", (bool) followSystemVolume.getValue());
         settings.saveIfNeeded();
     }
 
@@ -426,12 +442,27 @@ private:
             }
     }
 
-    void valueChanged (juce::Value&) override
+    void valueChanged (juce::Value& v) override
     {
+        if (v.refersToSameSourceAs (followSystemVolume))
+        {
+            settings.setValue ("seguirVolumenWindows", (bool) followSystemVolume.getValue());
+            timerCallback();
+            return;
+        }
         muted = (bool) muteValue.getValue();
         settings.setValue ("silenciarEntrada", muted.load());
         updateNotice();
         updateSize();
+    }
+
+    // Con ASIO, Windows no toca el sonido: las teclas de volumen y de silencio se aplican aquí.
+    void timerCallback() override
+    {
+        const auto type = deviceManager.getCurrentAudioDeviceType();
+        const bool follow = (bool) followSystemVolume.getValue();
+        const auto v = follow && deviceTypeBypassesSystemVolume (type) ? readSystemVolume() : SystemVolume();
+        outputGain.store (outputGainFor (type, follow, v));
     }
 
     //==========================================================================
@@ -444,15 +475,30 @@ private:
         {
             const int n = juce::jmin (numInputs, (int) silentInputs.size());
             player.audioDeviceIOCallbackWithContext (silentInputs.data(), n, outputs, numOutputs, numSamples, context);
-            return;
         }
-        player.audioDeviceIOCallbackWithContext (inputs, numInputs, outputs, numOutputs, numSamples, context);
+        else
+        {
+            player.audioDeviceIOCallbackWithContext (inputs, numInputs, outputs, numOutputs, numSamples, context);
+        }
+
+        // Volumen de Windows (con ASIO), con una rampa corta para que no chasquee
+        outputSmoothed.setTargetValue (outputGain.load());
+        if (! outputSmoothed.isSmoothing() && outputSmoothed.getCurrentValue() >= 0.9999f)
+            return;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float g = outputSmoothed.getNextValue();
+            for (int ch = 0; ch < numOutputs; ++ch)
+                if (outputs[ch] != nullptr) outputs[ch][i] *= g;
+        }
     }
 
     void audioDeviceAboutToStart (juce::AudioIODevice* device) override
     {
         silence.assign ((size_t) juce::jmax (8192, device->getCurrentBufferSizeSamples() * 4), 0.0f);
         silentInputs.fill (silence.data());
+        outputSmoothed.reset (device->getCurrentSampleRate(), 0.03);
+        outputSmoothed.setCurrentAndTargetValue (outputGain.load());
         player.audioDeviceAboutToStart (device);
     }
 
@@ -475,8 +521,10 @@ private:
 
     Launcher launcher;
     MuteNotice notice;
-    juce::Value muteValue;
+    juce::Value muteValue, followSystemVolume;
     std::atomic<bool> muted { true };
+    std::atomic<float> outputGain { 1.0f };
+    juce::SmoothedValue<float> outputSmoothed { 1.0f };
     std::vector<float> silence;
     std::array<const float*, 32> silentInputs {};
 

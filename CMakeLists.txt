@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(GeminisSuite VERSION 0.4.2 LANGUAGES C CXX)
+project(GeminisSuite VERSION 0.4.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -125,6 +125,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Source/inst/InstProcessor.cpp)
 
   set(GEMINIS_APP_SOURCES
     Source/app/GeminisApp.cpp
+    Source/app/SystemVolume.cpp
     ${GEMINIS_COMMON_SOURCES}
     ${GEMINIS_FX_DSP_SOURCES}
     Source/fx/Rack.cpp

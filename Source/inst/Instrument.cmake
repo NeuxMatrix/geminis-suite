@@ -49,6 +49,7 @@ if(GEMINIS_BUILD_TESTS)
   juce_add_console_app(GeminisInstTest PRODUCT_NAME "GeminisInstTest")
   target_sources(GeminisInstTest PRIVATE
     tests/InstTest.cpp
+    Source/app/SystemVolume.cpp
     ${GEMINIS_COMMON_SOURCES}
     ${GEMINIS_INST_DSP_SOURCES}
     Source/inst/InstProcessor.cpp
