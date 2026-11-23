@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
-project(GeminisSuite VERSION 0.4.3 LANGUAGES C CXX)
+
+# macOS: tienen que ir ANTES de project(). Después, project() ya ha creado estas variables vacías
+# y set(... CACHE) no las cambia, así que salía un binario solo para Apple Silicon y macOS 26.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Versión mínima de macOS")
+set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Intel y Apple Silicon")
+
+project(GeminisSuite VERSION 0.4.4 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "")
-set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
 if(MSVC)
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
