@@ -376,6 +376,74 @@ void GeminisInstrumentProcessor::setCurrentProgram (int index)
 }
 
 //==============================================================================
+juce::File GeminisInstrumentProcessor::maschineKitFolder()
+{
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Geminis")
+               .getChildFile (juce::String::fromUTF8 ("Kits para Maschine"));
+}
+
+juce::File GeminisInstrumentProcessor::exportKitForMaschine (const juce::MemoryBlock& state, int kitIndex, const juce::File& parentFolder)
+{
+    constexpr double rate = 48000.0;
+    constexpr int block = 256;
+    GeminisInstrumentProcessor p;
+    if (state.getSize() > 0) p.setStateInformation (state.getData(), (int) state.getSize());
+    if (kitIndex >= 0) p.applyKit (kitIndex);
+    if (p.getMode() != Mode::drums) p.setMode (Mode::drums);
+    p.setParams ({ { "seq_mode", 0.0f }, { "midi_map", 0.0f }, { "vol", 0.0f } });
+    p.drums.midiRoot.store (36);
+    p.setPlayConfigDetails (0, 2, rate, block);
+    p.prepareToPlay (rate, block);
+
+    const auto kitLabel = p.kitName.isNotEmpty() ? p.kitName : juce::String::fromUTF8 ("Kit Géminis");
+    auto dir = parentFolder.getChildFile (juce::File::createLegalFileName (kitLabel));
+    dir.deleteRecursively();
+    if (! dir.createDirectory()) return {};
+
+    juce::WavAudioFormat wav;
+    juce::AudioBuffer<float> buffer (2, block);
+    for (int pad = 0; pad < numPads; ++pad)
+    {
+        // Silencio entre pads: se cortan voces y colas del anterior
+        p.drums.reset();
+        p.fx.reset();
+
+        juce::AudioBuffer<float> out (2, (int) (rate * 6.0));
+        int written = 0, quietSamples = 0;
+        const int note = padToNote (pad, 0);
+        while (written + block <= out.getNumSamples())
+        {
+            juce::MidiBuffer midi;
+            if (written == 0) midi.addEvent (juce::MidiMessage::noteOn (10, note, (juce::uint8) 110), 0);
+            if (written <= (int) (rate * 0.1) && written + block > (int) (rate * 0.1))
+                midi.addEvent (juce::MidiMessage::noteOff (10, note), (int) (rate * 0.1) - written);
+            p.processBlock (buffer, midi);
+            for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, written, buffer, ch, 0, block);
+            written += block;
+            const float peak = buffer.getMagnitude (0, block);
+            quietSamples = peak < 0.0005f ? quietSamples + block : 0;   // -66 dB
+            if (written > (int) (rate * 0.3) && quietSamples > (int) (rate * 0.25)) break;
+        }
+
+        // Quita el silencio final y cierra con un fundido corto
+        int length = written;
+        while (length > 0 && out.getMagnitude (0, length - 1, 1) < 0.0005f && out.getMagnitude (1, length - 1, 1) < 0.0005f) --length;
+        length = juce::jmax (length, (int) (rate * 0.05));
+        const int fade = juce::jmin (length, (int) (rate * 0.005));
+        for (int ch = 0; ch < 2; ++ch) out.applyGainRamp (ch, length - fade, fade, 1.0f, 0.0f);
+
+        const auto soundName = drumSoundNames()[juce::roundToInt (p.getParam (padParamId (pad, "snd")))];
+        auto file = dir.getChildFile (juce::String (pad + 1).paddedLeft ('0', 2) + " " + juce::File::createLegalFileName (soundName) + ".wav");
+        std::unique_ptr<juce::OutputStream> os (file.createOutputStream().release());
+        if (os == nullptr) return {};
+        std::unique_ptr<juce::AudioFormatWriter> writer (wav.createWriterFor (os.get(), rate, 2, 24, {}, 0));
+        if (writer == nullptr) return {};
+        os.release();
+        writer->writeFromAudioSampleBuffer (out, 0, length);
+    }
+    return dir;
+}
+
 juce::File GeminisInstrumentProcessor::userSoundFolder()
 {
     auto dir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Geminis").getChildFile ("Sonidos");

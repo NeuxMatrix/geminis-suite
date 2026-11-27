@@ -1,4 +1,5 @@
 #include "InstEditor.h"
+#include <thread>
 #include "../common/AppHooks.h"
 #include "../common/Splash.h"
 #include "../common/Widgets.h"
@@ -1452,9 +1453,76 @@ public:
         setupKnob (bpm, s, "seq_bpm", "Tempo propio", c);
         setupKnob (swing, s, "seq_swing", "Swing", c);
         setupKnob (vol, s, "dr_vol", "Volumen", c);
-        for (auto* comp : std::initializer_list<juce::Component*> { &kits, &seqMode, &map, &bpm, &swing, &vol, &drag })
+        exportButton.setTooltip (U ("Guarda los 16 pads como WAV numerados. En Maschine, arrástralos juntos al pad 1: "
+                                    "cada sonido cae en su pad. Después guarda el grupo como Kit."));
+        exportButton.onClick = [this] { showExportMenu(); };
+        for (auto* comp : std::initializer_list<juce::Component*> { &kits, &seqMode, &map, &bpm, &swing, &vol, &drag, &exportButton })
             addAndMakeVisible (comp);
         presetChanged();
+    }
+
+    ~KitPanel() override
+    {
+        if (exportThread.joinable()) exportThread.join();
+    }
+
+    void showExportMenu()
+    {
+        if (exporting) return;
+        juce::PopupMenu m;
+        m.addItem (1, U ("Este kit (con tus cambios)"));
+        m.addItem (2, U ("Los 16 kits de fábrica"));
+        m.addSeparator();
+        m.addItem (3, U ("Abrir la carpeta de kits"));
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&exportButton), [this] (int r)
+        {
+            if (r == 3) { auto d = GeminisInstrumentProcessor::maschineKitFolder(); d.createDirectory(); d.startAsProcess(); return; }
+            if (r == 1 || r == 2) startExport (r == 2);
+        });
+    }
+
+    void startExport (bool allKits)
+    {
+        juce::MemoryBlock state;
+        proc.getStateInformation (state);
+        exporting = true;
+        exportButton.setEnabled (false);
+        exportButton.setButtonText (U ("Exportando..."));
+        if (exportThread.joinable()) exportThread.join();
+        exportThread = std::thread ([safe = juce::Component::SafePointer<KitPanel> (this), state, allKits]
+        {
+            const auto parent = GeminisInstrumentProcessor::maschineKitFolder();
+            parent.createDirectory();
+            juce::File last;
+            int done = 0;
+            const int total = allKits ? (int) drumKits().size() : 1;
+            for (int i = 0; i < total; ++i)
+            {
+                last = GeminisInstrumentProcessor::exportKitForMaschine (state, allKits ? i : -1, parent);
+                if (last != juce::File()) ++done;
+            }
+            juce::MessageManager::callAsync ([safe, last, done, total, allKits, parent]
+            {
+                if (auto* self = safe.getComponent())
+                {
+                    self->exporting = false;
+                    self->exportButton.setEnabled (true);
+                    self->exportButton.setButtonText (U ("Exportar a Maschine"));
+                }
+                if (done < total)
+                {
+                    juce::NativeMessageBox::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, U ("Exportar a Maschine"),
+                        U ("No se pudieron guardar todos los kits en ") + parent.getFullPathName());
+                    return;
+                }
+                (allKits ? parent : last).startAsProcess();
+                juce::NativeMessageBox::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, U ("Kit listo para Maschine"),
+                    U ("Guardado en ") + (allKits ? parent : last).getFullPathName() + "\n\n"
+                    + U ("En Maschine: elige un grupo vacío, selecciona los 16 archivos de un kit (01 a 16) y arrástralos "
+                         "juntos al pad 1. Cada sonido cae en su pad. Para tenerlo en el navegador de Kits, "
+                         "guárdalo con File > Save Group As."));
+            });
+        });
     }
 
     void presetChanged()
@@ -1483,7 +1551,10 @@ public:
 
     void resized() override
     {
-        kits.setBounds (header().removeFromRight (190));
+        auto head = header();
+        kits.setBounds (head.removeFromRight (190));
+        head.removeFromRight (8);
+        exportButton.setBounds (head.removeFromRight (150));
         auto b = body();
         infoArea = info = b.removeFromTop (58);
         b.removeFromTop (4);
@@ -1505,6 +1576,9 @@ private:
     ChoiceBox seqMode, map;
     ParamKnob bpm, swing, vol;
     MidiDragTile drag;
+    juce::TextButton exportButton { juce::String::fromUTF8 ("Exportar a Maschine") };
+    std::thread exportThread;
+    bool exporting = false;
     juce::Rectangle<int> info, infoArea, modeLabel, mapLabel;
 };
 

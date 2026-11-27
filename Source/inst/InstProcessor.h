@@ -56,6 +56,13 @@ public:
     juce::String getSynthPresetName() const { return synthPresetName; }
     juce::String getKitName() const { return kitName; }
 
+    /** Exporta los 16 pads de un kit como WAV numerados («01 Bombo duro.wav» ... «16 Ruido.wav») para
+        arrastrarlos juntos al pad 1 de Maschine, que reparte uno por pad. Con kitIndex < 0 exporta el kit
+        del estado tal cual (con los cambios del usuario). Se puede llamar desde cualquier hilo: trabaja
+        con una copia del plugin. Devuelve la carpeta del kit (o una vacía si falla). */
+    static juce::File exportKitForMaschine (const juce::MemoryBlock& state, int kitIndex, const juce::File& parentFolder);
+    static juce::File maschineKitFolder();   // Documentos/Geminis/Kits para Maschine
+
     /** Sonidos propios del sinte (Documentos/Geminis/Sonidos). */
     bool saveUserSound (const juce::File&);
     bool loadUserSound (const juce::File&);
