@@ -29,7 +29,9 @@ pkgbuild --analyze --root "$RAIZ" "$TMP/componentes.plist"
 plutil -convert xml1 "$TMP/componentes.plist"
 i=0
 while /usr/libexec/PlistBuddy -c "Print :$i" "$TMP/componentes.plist" > /dev/null 2>&1; do
-  /usr/libexec/PlistBuddy -c "Set :$i:BundleIsRelocatable false" "$TMP/componentes.plist"
+  # No todas las entradas traen la clave: se borra si está y se añade siempre
+  /usr/libexec/PlistBuddy -c "Delete :$i:BundleIsRelocatable" "$TMP/componentes.plist" > /dev/null 2>&1 || true
+  /usr/libexec/PlistBuddy -c "Add :$i:BundleIsRelocatable bool false" "$TMP/componentes.plist"
   i=$((i + 1))
 done
 
