@@ -59,6 +59,10 @@ jobs:
           find descargas/Geminis-macOS -path '*/AU/*.component' -prune -exec cp -R {} mac/AU/ \;
           test -n "$(ls mac/*.app)" && test -n "$(ls mac/VST3)" && test -n "$(ls mac/AU)"
           (cd mac && zip -qry "../publicar/Geminis-Suite-$VERSION-macOS.zip" .)
+          # Instalador .pkg de macOS (deja los plugins en /Library/Audio/Plug-Ins y el programa en Aplicaciones)
+          if ls descargas/Geminis-Instalador-macOS/*.pkg > /dev/null 2>&1; then
+            cp descargas/Geminis-Instalador-macOS/*.pkg "publicar/Geminis-Suite-$VERSION-macOS.pkg"
+          fi
           ls -la publicar
 
       - name: Crear la versión
