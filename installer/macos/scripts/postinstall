@@ -1,0 +1,7 @@
+#!/bin/bash
+# Quita la cuarentena y avisa a macOS de que hay Audio Units nuevos.
+xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/VST3/Geminis FX.vst3" "/Library/Audio/Plug-Ins/VST3/Geminis Instrument.vst3" \
+  "/Library/Audio/Plug-Ins/Components/Geminis FX.component" "/Library/Audio/Plug-Ins/Components/Geminis Instrument.component" \
+  "/Applications/Geminis.app" 2>/dev/null || true
+killall -9 AudioComponentRegistrar 2>/dev/null || true
+exit 0

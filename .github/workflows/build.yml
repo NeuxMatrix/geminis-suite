@@ -87,6 +87,18 @@ jobs:
           $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(GeminisSuite VERSION ([0-9.]+)').Matches[0].Groups[1].Value
           & $iscc "/DAppVersion=$version" installer\GeminisSuite.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Instalador de macOS
+        if: runner.os == 'macOS'
+        run: |
+          version=$(sed -nE 's/^project\(GeminisSuite VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)
+          installer/macos/crear-pkg.sh build "$version" "installer/Output/Geminis-Suite-$version-macOS.pkg"
+      - name: Publicar instalador de macOS
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Geminis-Instalador-macOS
+          if-no-files-found: error
+          path: installer/Output/*.pkg
       - name: Publicar instalador
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
