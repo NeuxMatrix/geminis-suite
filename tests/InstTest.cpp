@@ -215,6 +215,14 @@ int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
     if (argc > 1 && juce::String (argv[1]) == "--curvas") { printCurveMatrix(); return 0; }
+    if (argc > 2 && juce::String (argv[1]) == "--kits-maschine")   // exporta los 16 kits como WAV para Maschine
+    {
+        const juce::File out (juce::String::fromUTF8 (argv[2]));
+        out.createDirectory();
+        for (int i = 0; i < (int) drumKits().size(); ++i)
+            std::printf ("%s\n", GeminisInstrumentProcessor::exportKitForMaschine ({}, i, out).getFullPathName().toRawUTF8());
+        return 0;
+    }
     const juce::File wavDir = argc > 1 ? juce::File (juce::String::fromUTF8 (argv[1])) : juce::File();
     if (wavDir != juce::File()) wavDir.createDirectory();
 
@@ -356,6 +364,83 @@ int main (int argc, char** argv)
         check (peakDb < 3.0f, drumKits()[(size_t) i].name + ": demasiado fuerte");
         if (wavDir != juce::File())
             writeWav (wavDir.getChildFile ("kit " + juce::File::createLegalFileName (drumKits()[(size_t) i].name) + ".wav"), cap);
+    }
+
+    // Cargar un kit toca cada parámetro una sola vez, para que el DAW (Maschine) no se quede con un valor
+    // intermedio de fábrica, y los pads quedan con el sonido de su kit en los 16 kits
+    {
+        struct Counter : juce::AudioProcessorParameter::Listener
+        {
+            std::map<int, int> changes;
+            void parameterValueChanged (int index, float) override { ++changes[index]; }
+            void parameterGestureChanged (int, bool) override {}
+        } counter;
+        for (auto* p : proc->getParameters()) p->addListener (&counter);
+
+        int twice = 0, wrongPads = 0;
+        for (int i = 0; i < (int) drumKits().size(); ++i)
+        {
+            proc->applyKit ((i + 1) % (int) drumKits().size());   // desde otro kit, como con las flechas
+            counter.changes.clear();
+            proc->applyKit (i);
+            for (const auto& [index, n] : counter.changes) if (n > 1) ++twice;
+            for (int pad = 0; pad < numPads; ++pad)
+                if (juce::roundToInt (proc->getParam (padParamId (pad, "snd"))) != drumSoundIndex (drumKits()[(size_t) i].pads[(size_t) pad].sound))
+                    ++wrongPads;
+        }
+        for (auto* p : proc->getParameters()) p->removeListener (&counter);
+        std::printf ("Cargar kits: %d parámetros tocados dos veces, %d pads con otro sonido\n", twice, wrongPads);
+        check (twice == 0, "cargar un kit toca parámetros dos veces");
+        check (wrongPads == 0, "algún pad no queda con el sonido de su kit");
+
+        // Si el DAW devuelve los valores de fábrica justo después (lo que pasaba en Maschine), se recuperan
+        const int metal = 1;
+        proc->applyKit (0);
+        proc->applyKit (metal);
+        for (int pad = 0; pad < numPads; ++pad)
+            for (auto* what : { "snd", "tune", "decay", "snap" })
+                if (auto* p = proc->apvts.getParameter (padParamId (pad, what)))
+                    p->setValueNotifyingHost (p->getDefaultValue());
+        const int restored = proc->restoreBouncedParams();
+        int ok = 0;
+        for (int pad = 0; pad < numPads; ++pad)
+            if (juce::roundToInt (proc->getParam (padParamId (pad, "snd"))) == drumSoundIndex (drumKits()[metal].pads[(size_t) pad].sound)) ++ok;
+        std::printf ("Valores devueltos por el DAW: %d recuperados, %d de 16 pads con su sonido\n", restored, ok);
+        check (ok == numPads, "los pads no recuperan su sonido si el DAW devuelve los de fábrica");
+        // Un cambio del usuario no se deshace
+        proc->setParam (padParamId (1, "snd"), 5.0f);
+        proc->restoreBouncedParams();
+        check (juce::roundToInt (proc->getParam (padParamId (1, "snd"))) == 5, "la vigilancia deshace un cambio del usuario");
+    }
+
+    // Exportar un kit para Maschine: 16 WAV numerados, cada uno con el sonido de su pad
+    {
+        const auto tmp = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("geminis-kit-test");
+        tmp.deleteRecursively();
+        tmp.createDirectory();
+        const auto t0 = juce::Time::getMillisecondCounterHiRes();
+        const auto dir = GeminisInstrumentProcessor::exportKitForMaschine ({}, 1, tmp);
+        const auto ms = juce::Time::getMillisecondCounterHiRes() - t0;
+        auto files = dir.findChildFiles (juce::File::findFiles, false, "*.wav");
+        files.sort();
+        juce::WavAudioFormat wav;
+        int good = 0;
+        for (int i = 0; i < files.size(); ++i)
+        {
+            const auto& f = files.getReference (i);
+            const auto& kitPad = drumKits()[1].pads[(size_t) i];
+            std::unique_ptr<juce::AudioFormatReader> r (wav.createReaderFor (f.createInputStream().release(), true));
+            juce::AudioBuffer<float> b (2, r != nullptr ? (int) r->lengthInSamples : 0);
+            if (r != nullptr) r->read (&b, 0, b.getNumSamples(), 0, true, true);
+            const bool ok = r != nullptr && f.getFileName().startsWith (juce::String (i + 1).paddedLeft ('0', 2) + " " + kitPad.sound)
+                         && b.getNumSamples() > 2000 && b.getMagnitude (0, b.getNumSamples()) > 0.01f;
+            if (ok) ++good;
+            else check (false, "exportar Metal: mal el archivo " + f.getFileName());
+        }
+        std::printf ("Exportar Metal para Maschine: %d de 16 WAV correctos en %.0f ms (%s ...)\n", good, ms,
+                     files.isEmpty() ? "" : files[0].getFileName().toRawUTF8());
+        check (files.size() == numPads && good == numPads, "exportar un kit para Maschine no da 16 WAV con sonido");
+        tmp.deleteRecursively();
     }
 
     // Los 16 pads por MIDI con el mapa de Maschine y con General MIDI

@@ -56,6 +56,13 @@ public:
     juce::String getSynthPresetName() const { return synthPresetName; }
     juce::String getKitName() const { return kitName; }
 
+    /** Exporta los 16 pads de un kit como WAV numerados («01 Bombo duro.wav» ... «16 Ruido.wav») para
+        arrastrarlos juntos al pad 1 de Maschine, que reparte uno por pad. Con kitIndex < 0 exporta el kit
+        del estado tal cual (con los cambios del usuario). Se puede llamar desde cualquier hilo: trabaja
+        con una copia del plugin. Devuelve la carpeta del kit (o una vacía si falla). */
+    static juce::File exportKitForMaschine (const juce::MemoryBlock& state, int kitIndex, const juce::File& parentFolder);
+    static juce::File maschineKitFolder();   // Documentos/Geminis/Kits para Maschine
+
     /** Sonidos propios del sinte (Documentos/Geminis/Sonidos). */
     bool saveUserSound (const juce::File&);
     bool loadUserSound (const juce::File&);
@@ -64,6 +71,18 @@ public:
     /** Pone un parámetro en su valor real avisando al DAW. */
     void setParam (const juce::String& id, float realValue);
     float getParam (const juce::String& id) const;
+
+    /** Valores reales por identificador. Si un parámetro sale varias veces, vale el último. */
+    using ParamValues = std::vector<std::pair<juce::String, float>>;
+
+    /** Cambia un grupo de parámetros de una vez: cada parámetro se toca como mucho una vez (solo si cambia)
+        y con su gesto de edición, para que el DAW no se quede con un valor intermedio. */
+    void setParams (const ParamValues& values);
+
+    /** Algunos DAW (Maschine) devuelven al plugin el valor anterior de un parámetro justo después de
+        cargar un kit o un preset. Durante unos segundos se vigilan los parámetros cambiados y, si alguno
+        ha vuelto a su valor anterior o al de fábrica, se pone otra vez. Devuelve cuántos se corrigieron. */
+    int restoreBouncedParams();
 
     juce::AudioProcessorValueTreeState apvts;
     geminis::inst::SynthEngine synth;
@@ -80,10 +99,10 @@ public:
     std::function<void()> onPresetChanged;
 
 private:
-    void applyKitPads (int index);
+    ParamValues kitPadValues (int index) const;
     void timerCallback() override;
     void notifyChanged();
-    void resetParams (const std::function<bool (const juce::String&)>& which);
+    static ParamValues defaultValues (const std::function<bool (const juce::String&)>& which);
     void storeFxSnapshot (Mode);
     bool restoreFxSnapshot (Mode);
 
@@ -96,6 +115,10 @@ private:
     juce::AudioBuffer<float> work;
     juce::SmoothedValue<float> masterGain;
     std::atomic<float>* masterVol = nullptr;
+
+    struct ParamGuard { juce::RangedAudioParameter* param; float before, target; };
+    std::vector<ParamGuard> paramGuards;   // solo en el hilo de mensajes
+    int guardTicks = 0;
 
     JUCE_DECLARE_WEAK_REFERENCEABLE (GeminisInstrumentProcessor)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GeminisInstrumentProcessor)

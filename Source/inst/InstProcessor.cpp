@@ -132,6 +132,15 @@ void GeminisInstrumentProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
 void GeminisInstrumentProcessor::timerCallback()
 {
+    // Vigilancia tras cargar un kit o un preset (el temporizador va a 15 Hz: unos 3 segundos)
+    if (! paramGuards.empty())
+    {
+        ++guardTicks;
+        if (guardTicks == 2 || guardTicks == 6 || guardTicks == 15 || guardTicks == 45)
+            restoreBouncedParams();
+        if (guardTicks >= 45) paramGuards.clear();
+    }
+
     synth.updateTables();
     sampler.updateInstrument();
 }
@@ -149,11 +158,58 @@ float GeminisInstrumentProcessor::getParam (const juce::String& id) const
     return 0.0f;
 }
 
-void GeminisInstrumentProcessor::resetParams (const std::function<bool (const juce::String&)>& which)
+GeminisInstrumentProcessor::ParamValues GeminisInstrumentProcessor::defaultValues (const std::function<bool (const juce::String&)>& which)
 {
+    ParamValues v;
     for (const auto& d : allParamDefs())
         if (which (d.id))
-            setParam (d.id, d.def);
+            v.emplace_back (d.id, d.def);
+    return v;
+}
+
+void GeminisInstrumentProcessor::setParams (const ParamValues& values)
+{
+    // Último valor de cada parámetro, en el orden en que aparece por primera vez
+    std::vector<std::pair<juce::RangedAudioParameter*, float>> targets;
+    std::map<juce::RangedAudioParameter*, size_t> where;
+    for (const auto& [id, real] : values)
+        if (auto* p = apvts.getParameter (id))
+        {
+            const float norm = p->convertTo0to1 (real);
+            if (auto it = where.find (p); it != where.end()) targets[it->second].second = norm;
+            else { where[p] = targets.size(); targets.emplace_back (p, norm); }
+        }
+
+    const bool onMessageThread = juce::MessageManager::existsAndIsCurrentThread();
+    if (onMessageThread) { paramGuards.clear(); guardTicks = 0; }
+
+    for (const auto& [p, norm] : targets)
+    {
+        const float before = p->getValue();
+        if (onMessageThread) paramGuards.push_back ({ p, before, norm });   // también los que no cambian
+        if (std::abs (before - norm) < 1.0e-6f) continue;
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (norm);
+        p->endChangeGesture();
+    }
+}
+
+int GeminisInstrumentProcessor::restoreBouncedParams()
+{
+    int restored = 0;
+    for (const auto& g : paramGuards)
+    {
+        const float now = g.param->getValue();
+        const bool bounced = std::abs (now - g.before) < 1.0e-5f || std::abs (now - g.param->getDefaultValue()) < 1.0e-5f;
+        if (std::abs (now - g.target) > 1.0e-5f && bounced)
+        {
+            g.param->beginChangeGesture();
+            g.param->setValueNotifyingHost (g.target);
+            g.param->endChangeGesture();
+            ++restored;
+        }
+    }
+    return restored;
 }
 
 void GeminisInstrumentProcessor::notifyChanged()
@@ -175,7 +231,7 @@ bool GeminisInstrumentProcessor::restoreFxSnapshot (Mode m)
 {
     const auto& snap = fxSnapshots[(size_t) m];
     if (snap.empty()) return false;
-    for (const auto& [id, v] : snap) setParam (id, v);
+    setParams (snap);
     return true;
 }
 
@@ -199,8 +255,9 @@ void GeminisInstrumentProcessor::setMode (Mode m)
         applyKit (0);
     else if (m == Mode::instruments && ! restored)
     {
-        resetParams (isFxParam);
-        setParam ("fx_rev_mix", 14.0f);
+        auto v = defaultValues (isFxParam);
+        v.emplace_back ("fx_rev_mix", 14.0f);
+        setParams (v);
     }
     notifyChanged();
 }
@@ -211,8 +268,9 @@ void GeminisInstrumentProcessor::applySynthPreset (int index)
     if (! juce::isPositiveAndBelow (index, (int) list.size())) return;
     const auto& p = list[(size_t) index];
 
-    resetParams (isSynthParam);
-    for (const auto& [id, v] : p.values) setParam (id, v);
+    auto values = defaultValues (isSynthParam);
+    for (const auto& [id, v] : p.values) values.emplace_back (id, v);
+    setParams (values);
     synth.setDrawnWave (0, DrawnWave::preset (p.drawn1 >= 0 ? p.drawn1 : 1));
     synth.setDrawnWave (1, DrawnWave::preset (p.drawn2 >= 0 ? p.drawn2 : 2));
     synth.updateTables();
@@ -230,12 +288,17 @@ void GeminisInstrumentProcessor::applyKit (int index)
     if (! juce::isPositiveAndBelow (index, (int) kits.size())) return;
     const auto& k = kits[(size_t) index];
 
-    resetParams ([] (const juce::String& id) { return isFxParam (id) || isPadParam (id); });
-    applyKitPads (index);
-    setParam ("seq_bpm", (float) k.bpm);
-    setParam ("seq_swing", k.swing);
-    setParam ("seq_pattern", 0.0f);
-    for (const auto& [id, v] : k.extra) setParam (id, v);
+    // Todo de una vez: si se pusieran primero los valores de fábrica y luego los del kit,
+    // Maschine se quedaba con los de fábrica y los 16 pads acababan en «Bombo seco».
+    auto values = defaultValues ([] (const juce::String& id) { return isFxParam (id) || isPadParam (id); });
+    for (auto& v : kitPadValues (index)) values.push_back (std::move (v));
+    values.emplace_back ("seq_bpm", (float) k.bpm);
+    values.emplace_back ("seq_swing", k.swing);
+    values.emplace_back ("seq_pattern", 0.0f);
+    for (const auto& [id, v] : k.extra) values.emplace_back (id, v);
+    setParams (values);
+    for (int i = 0; i < numPatterns; ++i)
+        drums.setPattern (i, k.patterns[(size_t) i]);
 
     kit = index;
     kitName = k.name;
@@ -244,24 +307,26 @@ void GeminisInstrumentProcessor::applyKit (int index)
     notifyChanged();
 }
 
-void GeminisInstrumentProcessor::applyKitPads (int index)
+GeminisInstrumentProcessor::ParamValues GeminisInstrumentProcessor::kitPadValues (int index) const
 {
     const auto& k = drumKits()[(size_t) index];
+    ParamValues v;
     for (int pad = 0; pad < numPads; ++pad)
     {
         const auto& pp = k.pads[(size_t) pad];
-        setParam (padParamId (pad, "snd"), (float) juce::jmax (0, drumSoundIndex (pp.sound)));
-        setParam (padParamId (pad, "tune"), pp.tune);
-        setParam (padParamId (pad, "decay"), pp.decay);
-        setParam (padParamId (pad, "tone"), pp.tone);
-        setParam (padParamId (pad, "snap"), pp.snap);
-        setParam (padParamId (pad, "drive"), pp.drive);
-        setParam (padParamId (pad, "level"), pp.level);
-        setParam (padParamId (pad, "pan"), pp.pan);
-        setParam (padParamId (pad, "choke"), (float) pp.choke);
+        const int snd = drumSoundIndex (pp.sound);
+        jassert (snd >= 0);   // un nombre de sonido que no existe dejaría el pad en «Bombo seco»
+        v.emplace_back (padParamId (pad, "snd"), (float) juce::jmax (0, snd));
+        v.emplace_back (padParamId (pad, "tune"), pp.tune);
+        v.emplace_back (padParamId (pad, "decay"), pp.decay);
+        v.emplace_back (padParamId (pad, "tone"), pp.tone);
+        v.emplace_back (padParamId (pad, "snap"), pp.snap);
+        v.emplace_back (padParamId (pad, "drive"), pp.drive);
+        v.emplace_back (padParamId (pad, "level"), pp.level);
+        v.emplace_back (padParamId (pad, "pan"), pp.pan);
+        v.emplace_back (padParamId (pad, "choke"), (float) pp.choke);
     }
-    for (int i = 0; i < numPatterns; ++i)
-        drums.setPattern (i, k.patterns[(size_t) i]);
+    return v;
 }
 
 void GeminisInstrumentProcessor::applyInstrument (int index)
@@ -311,6 +376,74 @@ void GeminisInstrumentProcessor::setCurrentProgram (int index)
 }
 
 //==============================================================================
+juce::File GeminisInstrumentProcessor::maschineKitFolder()
+{
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Geminis")
+               .getChildFile (juce::String::fromUTF8 ("Kits para Maschine"));
+}
+
+juce::File GeminisInstrumentProcessor::exportKitForMaschine (const juce::MemoryBlock& state, int kitIndex, const juce::File& parentFolder)
+{
+    constexpr double rate = 48000.0;
+    constexpr int block = 256;
+    GeminisInstrumentProcessor p;
+    if (state.getSize() > 0) p.setStateInformation (state.getData(), (int) state.getSize());
+    if (kitIndex >= 0) p.applyKit (kitIndex);
+    if (p.getMode() != Mode::drums) p.setMode (Mode::drums);
+    p.setParams ({ { "seq_mode", 0.0f }, { "midi_map", 0.0f }, { "vol", 0.0f } });
+    p.drums.midiRoot.store (36);
+    p.setPlayConfigDetails (0, 2, rate, block);
+    p.prepareToPlay (rate, block);
+
+    const auto kitLabel = p.kitName.isNotEmpty() ? p.kitName : juce::String::fromUTF8 ("Kit Géminis");
+    auto dir = parentFolder.getChildFile (juce::File::createLegalFileName (kitLabel));
+    dir.deleteRecursively();
+    if (! dir.createDirectory()) return {};
+
+    juce::WavAudioFormat wav;
+    juce::AudioBuffer<float> buffer (2, block);
+    for (int pad = 0; pad < numPads; ++pad)
+    {
+        // Silencio entre pads: se cortan voces y colas del anterior
+        p.drums.reset();
+        p.fx.reset();
+
+        juce::AudioBuffer<float> out (2, (int) (rate * 6.0));
+        int written = 0, quietSamples = 0;
+        const int note = padToNote (pad, 0);
+        while (written + block <= out.getNumSamples())
+        {
+            juce::MidiBuffer midi;
+            if (written == 0) midi.addEvent (juce::MidiMessage::noteOn (10, note, (juce::uint8) 110), 0);
+            if (written <= (int) (rate * 0.1) && written + block > (int) (rate * 0.1))
+                midi.addEvent (juce::MidiMessage::noteOff (10, note), (int) (rate * 0.1) - written);
+            p.processBlock (buffer, midi);
+            for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, written, buffer, ch, 0, block);
+            written += block;
+            const float peak = buffer.getMagnitude (0, block);
+            quietSamples = peak < 0.0005f ? quietSamples + block : 0;   // -66 dB
+            if (written > (int) (rate * 0.3) && quietSamples > (int) (rate * 0.25)) break;
+        }
+
+        // Quita el silencio final y cierra con un fundido corto
+        int length = written;
+        while (length > 0 && out.getMagnitude (0, length - 1, 1) < 0.0005f && out.getMagnitude (1, length - 1, 1) < 0.0005f) --length;
+        length = juce::jmax (length, (int) (rate * 0.05));
+        const int fade = juce::jmin (length, (int) (rate * 0.005));
+        for (int ch = 0; ch < 2; ++ch) out.applyGainRamp (ch, length - fade, fade, 1.0f, 0.0f);
+
+        const auto soundName = drumSoundNames()[juce::roundToInt (p.getParam (padParamId (pad, "snd")))];
+        auto file = dir.getChildFile (juce::String (pad + 1).paddedLeft ('0', 2) + " " + juce::File::createLegalFileName (soundName) + ".wav");
+        std::unique_ptr<juce::OutputStream> os (file.createOutputStream().release());
+        if (os == nullptr) return {};
+        std::unique_ptr<juce::AudioFormatWriter> writer (wav.createWriterFor (os.get(), rate, 2, 24, {}, 0));
+        if (writer == nullptr) return {};
+        os.release();
+        writer->writeFromAudioSampleBuffer (out, 0, length);
+    }
+    return dir;
+}
+
 juce::File GeminisInstrumentProcessor::userSoundFolder()
 {
     auto dir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Geminis").getChildFile ("Sonidos");
@@ -342,12 +475,13 @@ bool GeminisInstrumentProcessor::loadUserSound (const juce::File& file)
 {
     auto xml = juce::XmlDocument::parse (file);
     if (xml == nullptr || ! xml->hasTagName ("GeminisSound")) return false;
-    resetParams (isSynthParam);
+    auto values = defaultValues (isSynthParam);
     for (auto* e : xml->getChildWithTagNameIterator ("p"))
     {
         const auto id = e->getStringAttribute ("id");
-        if (isSynthParam (id)) setParam (id, (float) e->getDoubleAttribute ("v"));
+        if (isSynthParam (id)) values.emplace_back (id, (float) e->getDoubleAttribute ("v"));
     }
+    setParams (values);
     synth.setDrawnWave (0, DrawnWave::fromString (xml->getStringAttribute ("drawn1")));
     synth.setDrawnWave (1, DrawnWave::fromString (xml->getStringAttribute ("drawn2")));
     synth.updateTables();
@@ -396,6 +530,7 @@ void GeminisInstrumentProcessor::setStateInformation (const void* data, int size
     if (xml == nullptr) return;
     auto state = juce::ValueTree::fromXml (*xml);
     if (! state.isValid() || ! state.hasType (apvts.state.getType())) return;
+    if (juce::MessageManager::existsAndIsCurrentThread()) paramGuards.clear();   // manda el estado del DAW
 
     mode.store (juce::jlimit (0, 3, (int) state.getProperty ("mode", 0)));
     synthPreset = (int) state.getProperty ("synthPreset", -1);
@@ -437,7 +572,9 @@ void GeminisInstrumentProcessor::setStateInformation (const void* data, int size
         if (juce::isPositiveAndBelow (kit, (int) kits.size()))
         {
             kitName = kits[(size_t) kit].name;
-            applyKitPads (kit);
+            setParams (kitPadValues (kit));
+            for (int i = 0; i < numPatterns; ++i)
+                drums.setPattern (i, kits[(size_t) kit].patterns[(size_t) i]);
         }
     }
 
