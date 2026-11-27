@@ -358,6 +358,53 @@ int main (int argc, char** argv)
             writeWav (wavDir.getChildFile ("kit " + juce::File::createLegalFileName (drumKits()[(size_t) i].name) + ".wav"), cap);
     }
 
+    // Cargar un kit toca cada parámetro una sola vez, para que el DAW (Maschine) no se quede con un valor
+    // intermedio de fábrica, y los pads quedan con el sonido de su kit en los 16 kits
+    {
+        struct Counter : juce::AudioProcessorParameter::Listener
+        {
+            std::map<int, int> changes;
+            void parameterValueChanged (int index, float) override { ++changes[index]; }
+            void parameterGestureChanged (int, bool) override {}
+        } counter;
+        for (auto* p : proc->getParameters()) p->addListener (&counter);
+
+        int twice = 0, wrongPads = 0;
+        for (int i = 0; i < (int) drumKits().size(); ++i)
+        {
+            proc->applyKit ((i + 1) % (int) drumKits().size());   // desde otro kit, como con las flechas
+            counter.changes.clear();
+            proc->applyKit (i);
+            for (const auto& [index, n] : counter.changes) if (n > 1) ++twice;
+            for (int pad = 0; pad < numPads; ++pad)
+                if (juce::roundToInt (proc->getParam (padParamId (pad, "snd"))) != drumSoundIndex (drumKits()[(size_t) i].pads[(size_t) pad].sound))
+                    ++wrongPads;
+        }
+        for (auto* p : proc->getParameters()) p->removeListener (&counter);
+        std::printf ("Cargar kits: %d parámetros tocados dos veces, %d pads con otro sonido\n", twice, wrongPads);
+        check (twice == 0, "cargar un kit toca parámetros dos veces");
+        check (wrongPads == 0, "algún pad no queda con el sonido de su kit");
+
+        // Si el DAW devuelve los valores de fábrica justo después (lo que pasaba en Maschine), se recuperan
+        const int metal = 1;
+        proc->applyKit (0);
+        proc->applyKit (metal);
+        for (int pad = 0; pad < numPads; ++pad)
+            for (auto* what : { "snd", "tune", "decay", "snap" })
+                if (auto* p = proc->apvts.getParameter (padParamId (pad, what)))
+                    p->setValueNotifyingHost (p->getDefaultValue());
+        const int restored = proc->restoreBouncedParams();
+        int ok = 0;
+        for (int pad = 0; pad < numPads; ++pad)
+            if (juce::roundToInt (proc->getParam (padParamId (pad, "snd"))) == drumSoundIndex (drumKits()[metal].pads[(size_t) pad].sound)) ++ok;
+        std::printf ("Valores devueltos por el DAW: %d recuperados, %d de 16 pads con su sonido\n", restored, ok);
+        check (ok == numPads, "los pads no recuperan su sonido si el DAW devuelve los de fábrica");
+        // Un cambio del usuario no se deshace
+        proc->setParam (padParamId (1, "snd"), 5.0f);
+        proc->restoreBouncedParams();
+        check (juce::roundToInt (proc->getParam (padParamId (1, "snd"))) == 5, "la vigilancia deshace un cambio del usuario");
+    }
+
     // Los 16 pads por MIDI con el mapa de Maschine y con General MIDI
     for (int map = 0; map < 2; ++map)
     {
